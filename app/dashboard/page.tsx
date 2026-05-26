@@ -593,6 +593,11 @@ export default function DashboardPage() {
                               const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
                               const blocks = Math.ceil(totalMinutes / 10);
 
+                              // 计算任务跨越的小时数
+                              const spanHours = Math.ceil(totalMinutes / 60);
+                              // 每个小时块的高度是 48px (h-12)，计算实际需要的高度
+                              const heightInPixels = (totalMinutes / 60) * 48;
+
                               // 根据任务状态选择颜色
                               const colorClass = task.status === 'completed'
                                 ? 'from-teal-500 to-green-600'
@@ -608,7 +613,7 @@ export default function DashboardPage() {
                                   style={{
                                     left: `${(startBlock / 6) * 100}%`,
                                     width: `${Math.min((blocks / 6) * 100, 100 - (startBlock / 6) * 100)}%`,
-                                    height: blocks > 6 ? '180%' : '100%',
+                                    height: `${heightInPixels}px`,
                                   }}
                                 >
                                   <div className={`h-full bg-gradient-to-r ${colorClass} rounded-lg p-2 shadow-lg`}>
