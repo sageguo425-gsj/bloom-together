@@ -430,8 +430,10 @@ function TaskItem({ task, onUpdate, onEdit }: { task: Task; onUpdate: () => void
       <input
         type="checkbox"
         checked={isCompleted}
-        onChange={handleToggleComplete}
-        onClick={handleToggleComplete}
+        onChange={(e) => {
+          e.stopPropagation();
+          handleToggleComplete(e);
+        }}
         className="mt-1 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
       />
       <div className="flex-1">
