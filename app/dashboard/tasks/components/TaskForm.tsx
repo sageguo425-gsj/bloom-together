@@ -62,13 +62,17 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 加载项目
-      const { data: projectsData } = await supabase
+      // 加载项目 - 加载所有未归档的项目
+      const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
-        .select('id, title')
+        .select('id, title, status')
         .eq('user_id', user.id)
-        .eq('status', 'active')
+        .neq('status', 'archived')
         .order('title');
+
+      if (projectsError) {
+        console.error('加载项目失败:', projectsError);
+      }
 
       // 加载习惯 - 只加载活跃的习惯
       const { data: habitsData } = await supabase
