@@ -611,7 +611,7 @@ export default function DashboardPage() {
                                 <div
                                   key={blockIndex}
                                   className={`h-12 border-r border-b border-gray-200 transition-colors cursor-pointer relative group ${bgColor}`}
-                                  title={blockTask ? `${blockTask.title} (${blockTask.start_time.slice(0, 5)} - ${blockTask.end_time.slice(0, 5)})` : `${hour}:${blockStartMinute.toString().padStart(2, '0')}`}
+                                  title={blockTask && blockTask.start_time && blockTask.end_time ? `${blockTask.title} (${blockTask.start_time.slice(0, 5)} - ${blockTask.end_time.slice(0, 5)})` : `${hour}:${blockStartMinute.toString().padStart(2, '0')}`}
                                 >
                                   {/* 时间块提示 */}
                                   {!blockTask && (
