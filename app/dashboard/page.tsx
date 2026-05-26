@@ -512,46 +512,28 @@ export default function DashboardPage() {
               {/* 头部 */}
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-light text-gray-900">每日日程</h3>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleDateChange('prev')}
-                      className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                    >
-                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center">
-                      {new Date(selectedDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
-                    </span>
-                    <button
-                      onClick={() => handleDateChange('next')}
-                      className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                    >
-                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-center">
-                    <button
-                      onClick={() => handleDateChange('prev')}
-                      className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                    >
-                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center">
-                      {new Date(selectedDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
-                    </span>
-                    <button
-                      onClick={() => handleDateChange('next')}
-                      className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                    >
-                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleDateChange('prev')}
+                    className="p-2 hover:bg-white/60 rounded-lg transition-all"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center">
+                    {new Date(selectedDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                  </span>
+                  <button
+                    onClick={() => handleDateChange('next')}
+                    className="p-2 hover:bg-white/60 rounded-lg transition-all"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
                       </svg>
                     </button>
                   </div>
@@ -613,7 +595,27 @@ export default function DashboardPage() {
                                   className={`h-12 border-r border-b border-gray-200 transition-colors cursor-pointer relative group ${bgColor}`}
                                   title={blockTask && blockTask.start_time && blockTask.end_time ? `${blockTask.title} (${blockTask.start_time.slice(0, 5)} - ${blockTask.end_time.slice(0, 5)})` : `${hour}:${blockStartMinute.toString().padStart(2, '0')}`}
                                 >
-                                  {/* 时间块提示 */}
+                                  {/* 任务名称显示 - 只在任务开始的第一个格子显示 */}
+                                  {blockTask && blockTask.start_time && (
+                                    (() => {
+                                      const [taskStartHour, taskStartMin] = blockTask.start_time.split(':').map(Number);
+                                      const taskStartBlock = Math.floor(taskStartMin / 10);
+                                      const isFirstBlock = hour === taskStartHour && blockIndex === taskStartBlock;
+
+                                      if (isFirstBlock) {
+                                        return (
+                                          <div className="absolute inset-0 flex items-center justify-start px-1 overflow-hidden">
+                                            <span className="text-[10px] text-white font-medium truncate">
+                                              {blockTask.title}
+                                            </span>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    })()
+                                  )}
+
+                                  {/* 时间块提示 - 只在空闲时显示 */}
                                   {!blockTask && (
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                       <span className="text-xs text-gray-500 font-light">
