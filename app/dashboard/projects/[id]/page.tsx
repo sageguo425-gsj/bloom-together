@@ -367,7 +367,7 @@ function TaskItem({ task, onUpdate, onEdit }: { task: Task; onUpdate: () => void
   const [isCompleted, setIsCompleted] = useState(task.status === 'completed');
   const supabase = createClient();
 
-  const handleToggleComplete = async (e: React.MouseEvent) => {
+  const handleToggleComplete = async (e: React.MouseEvent | React.ChangeEvent) => {
     e.stopPropagation(); // 阻止事件冒泡
     try {
       const newStatus = isCompleted ? 'pending' : 'completed';
