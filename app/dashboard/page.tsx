@@ -129,9 +129,9 @@ export default function DashboardPage() {
     try {
       const { data, error } = await supabase
         .from('projects')
-        .select('id')
+        .select('id, status')
         .eq('user_id', userId)
-        .eq('status', 'active');
+        .neq('status', 'archived');
 
       if (error) {
         console.error('获取项目列表失败:', error);
@@ -139,9 +139,12 @@ export default function DashboardPage() {
         return;
       }
 
-      setProjectStats({ activeProjects: data?.length || 0 });
+      // 统计活跃项目（active 和 completed 状态）
+      const activeCount = data?.filter(p => p.status === 'active' || p.status === 'completed').length || 0;
+      setProjectStats({ activeProjects: activeCount });
     } catch (error) {
       console.error('加载项目统计失败:', error);
+      setProjectStats({ activeProjects: 0 });
     }
   };
 
