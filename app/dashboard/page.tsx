@@ -57,7 +57,20 @@ export default function DashboardPage() {
     };
 
     getUser();
-  }, [router, supabase]);
+
+    // 添加页面可见性监听，当页面重新获得焦点时刷新任务
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        loadTodayTasks(user.id, selectedDate);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [router, supabase, selectedDate, user]);
 
   const loadTodayTasks = async (userId: string, date?: string) => {
     try {
