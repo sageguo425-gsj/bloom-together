@@ -64,7 +64,7 @@ export default function TaskCard({
 
   return (
     <div
-      className={`relative group bg-white/80 backdrop-blur-sm rounded-2xl border-l-4 ${priorityColors[task.priority]} border-t border-r border-b border-emerald-100/50 p-5 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 ${
+      className={`relative group bg-white/80 backdrop-blur-sm rounded-2xl border-l-4 ${priorityColors[task.priority]} border-t border-r border-b border-emerald-100/50 p-5 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 min-h-[180px] flex flex-col ${
         isSelected ? 'ring-2 ring-emerald-500 shadow-lg' : ''
       }`}
       onMouseEnter={() => setShowActions(true)}
@@ -131,6 +131,14 @@ export default function TaskCard({
             }`}>
               {TASK_PRIORITY_LABELS[task.priority]}
             </span>
+            {task.project_id && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-200">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                <span>项目</span>
+              </span>
+            )}
           </div>
 
           {/* 标签 */}
