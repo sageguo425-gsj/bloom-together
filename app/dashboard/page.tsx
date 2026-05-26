@@ -534,9 +534,26 @@ export default function DashboardPage() {
                       </svg>
                     </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 font-light">时间冲突检测</span>
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm"></div>
+                  <div className="flex items-center justify-center">
+                    <button
+                      onClick={() => handleDateChange('prev')}
+                      className="p-2 hover:bg-white/60 rounded-lg transition-all"
+                    >
+                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center">
+                      {new Date(selectedDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                    </span>
+                    <button
+                      onClick={() => handleDateChange('next')}
+                      className="p-2 hover:bg-white/60 rounded-lg transition-all"
+                    >
+                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -546,13 +563,6 @@ export default function DashboardPage() {
                 {/* 时间刻度 */}
                 <div className="space-y-0">
                   {Array.from({ length: 17 }, (_, i) => i + 7).map((hour) => {
-                    // 找到这个小时内的任务
-                    const hourTasks = todayTasks.filter((task) => {
-                      if (!task.start_time) return false;
-                      const taskHour = parseInt(task.start_time.split(':')[0]);
-                      return taskHour === hour;
-                    });
-
                     return (
                       <div key={hour} className="relative">
                         {/* 小时标签 */}
@@ -566,68 +576,52 @@ export default function DashboardPage() {
                         {/* 6个10分钟时间块 */}
                         <div className="flex items-start gap-4">
                           <div className="w-16 flex-shrink-0"></div>
-                          <div className="flex-1 grid grid-cols-6 gap-0 relative">
-                            {Array.from({ length: 6 }, (_, blockIndex) => (
-                              <div
-                                key={blockIndex}
-                                className="h-12 border-r border-b border-gray-200 hover:bg-teal-100/50 transition-colors cursor-pointer relative group"
-                              >
-                                {/* 时间块提示 */}
-                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <span className="text-xs text-gray-500 font-light">
-                                    {hour}:{(blockIndex * 10).toString().padStart(2, '0')}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                          <div className="flex-1 grid grid-cols-6 gap-0">
+                            {Array.from({ length: 6 }, (_, blockIndex) => {
+                              const blockStartMinute = blockIndex * 10;
+                              const blockTime = hour * 60 + blockStartMinute;
 
-                            {/* 渲染任务块 */}
-                            {hourTasks.map((task) => {
-                              if (!task.start_time || !task.end_time) return null;
+                              // 查找覆盖这个时间块的任务
+                              const blockTask = todayTasks.find((task) => {
+                                if (!task.start_time || !task.end_time) return false;
 
-                              const [startHour, startMin] = task.start_time.split(':').map(Number);
-                              const [endHour, endMin] = task.end_time.split(':').map(Number);
+                                const [startHour, startMin] = task.start_time.split(':').map(Number);
+                                const [endHour, endMin] = task.end_time.split(':').map(Number);
 
-                              // 只在任务开始的小时显示
-                              if (startHour !== hour) return null;
+                                const taskStartMinute = startHour * 60 + startMin;
+                                const taskEndMinute = endHour * 60 + endMin;
 
-                              // 计算任务的位置和宽度
-                              const startBlock = Math.floor(startMin / 10);
-                              const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
-                              const blocks = Math.ceil(totalMinutes / 10);
-
-                              // 计算任务跨越的小时数
-                              const spanHours = Math.ceil(totalMinutes / 60);
-                              // 每个小时块的高度是 48px (h-12)，计算实际需要的高度
-                              const heightInPixels = (totalMinutes / 60) * 48;
+                                // 检查这个时间块是否在任务时间范围内
+                                return blockTime >= taskStartMinute && blockTime < taskEndMinute;
+                              });
 
                               // 根据任务状态选择颜色
-                              const colorClass = task.status === 'completed'
-                                ? 'from-teal-500 to-green-600'
-                                : task.status === 'in_progress'
-                                ? 'from-emerald-500 to-teal-600'
-                                : 'from-slate-400 to-gray-500';
+                              let bgColor = 'bg-white hover:bg-teal-50';
+                              if (blockTask) {
+                                if (blockTask.status === 'completed') {
+                                  bgColor = 'bg-teal-400 hover:bg-teal-500';
+                                } else if (blockTask.status === 'in_progress') {
+                                  bgColor = 'bg-emerald-400 hover:bg-emerald-500';
+                                } else {
+                                  bgColor = 'bg-slate-300 hover:bg-slate-400';
+                                }
+                              }
 
                               return (
-                                <Link
-                                  key={task.id}
-                                  href="/dashboard/tasks"
-                                  className="absolute z-10 cursor-pointer hover:shadow-xl transition-all"
-                                  style={{
-                                    left: `${(startBlock / 6) * 100}%`,
-                                    width: `${Math.min((blocks / 6) * 100, 100 - (startBlock / 6) * 100)}%`,
-                                    height: `${heightInPixels}px`,
-                                  }}
+                                <div
+                                  key={blockIndex}
+                                  className={`h-12 border-r border-b border-gray-200 transition-colors cursor-pointer relative group ${bgColor}`}
+                                  title={blockTask ? `${blockTask.title} (${blockTask.start_time.slice(0, 5)} - ${blockTask.end_time.slice(0, 5)})` : `${hour}:${blockStartMinute.toString().padStart(2, '0')}`}
                                 >
-                                  <div className={`h-full bg-gradient-to-r ${colorClass} rounded-lg p-2 shadow-lg`}>
-                                    <p className="text-white text-xs font-medium mb-0.5 truncate">
-                                      {task.title}
-                                    </p>
-                                    <p className="text-white/90 text-[10px] truncate">
-                                      {task.start_time.slice(0, 5)} - {task.end_time.slice(0, 5)}
-                                    </p>
-                                  </div>
-                                </Link>
+                                  {/* 时间块提示 */}
+                                  {!blockTask && (
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <span className="text-xs text-gray-500 font-light">
+                                        {hour}:{blockStartMinute.toString().padStart(2, '0')}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>
@@ -654,23 +648,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* 图例 */}
-              <div className="mt-6 pt-4 border-t border-teal-200 flex items-center gap-4 text-xs">
-                <span className="text-gray-600 font-light">项目分类：</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm"></div>
-                  <span className="text-gray-700">项目A</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-gradient-to-r from-teal-500 to-cyan-600 shadow-sm"></div>
-                  <span className="text-gray-700">项目B</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-500 to-pink-600 shadow-sm"></div>
-                  <span className="text-gray-700">项目C</span>
-                </div>
               </div>
             </div>
           </div>
