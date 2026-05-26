@@ -534,11 +534,6 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </div>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
 
               {/* 时间轴 */}
               <div className="relative max-h-[500px] overflow-y-auto bg-white/60 rounded-2xl p-4">
