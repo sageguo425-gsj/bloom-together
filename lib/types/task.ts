@@ -38,6 +38,7 @@ export interface TaskFormData {
   title: string;
   description?: string;
   priority: TaskPriority;
+  status?: TaskStatus;
   tags: TaskTag[];
   date: string;
   start_time?: string;
@@ -55,7 +56,7 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
 };
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: '待办',
+  pending: '未开始',
   in_progress: '进行中',
   completed: '已完成',
 };

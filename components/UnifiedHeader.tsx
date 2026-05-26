@@ -2,34 +2,24 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { getUserProfile, type UserProfile } from '@/lib/services/userService'
 import { UserSettingsModal } from '@/components/UserSettingsModal'
 import { Settings, LogOut, User as UserIcon } from 'lucide-react'
 
-export function DashboardNav() {
+interface UnifiedHeaderProps {
+  currentPage?: 'home' | 'tasks' | 'pomodoro' | 'projects' | 'habits' | 'partner'
+}
+
+export function UnifiedHeader({ currentPage }: UnifiedHeaderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const router = useRouter()
-  const pathname = usePathname()
   const supabase = createClient()
-
-  // 自动检测当前页面
-  const getCurrentPage = (): 'home' | 'tasks' | 'pomodoro' | 'projects' | 'habits' | 'partner' => {
-    if (pathname === '/dashboard') return 'home'
-    if (pathname?.startsWith('/dashboard/tasks')) return 'tasks'
-    if (pathname?.startsWith('/dashboard/pomodoro')) return 'pomodoro'
-    if (pathname?.startsWith('/dashboard/projects')) return 'projects'
-    if (pathname?.startsWith('/dashboard/habits')) return 'habits'
-    if (pathname?.startsWith('/dashboard/partner')) return 'partner'
-    return 'home'
-  }
-
-  const currentPage = getCurrentPage()
 
   useEffect(() => {
     loadUserData()
@@ -67,60 +57,60 @@ export function DashboardNav() {
               <nav className="hidden md:flex space-x-1">
                 <Link
                   href="/dashboard"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                  className={`px-5 py-2.5 rounded-full text-sm transition-all ${
                     currentPage === 'home'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                      ? 'text-white bg-white/20 font-medium'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-light'
                   }`}
                 >
                   首页
                 </Link>
                 <Link
                   href="/dashboard/tasks"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                  className={`px-5 py-2.5 rounded-full text-sm transition-all ${
                     currentPage === 'tasks'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                      ? 'text-white bg-white/20 font-medium'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-light'
                   }`}
                 >
                   任务
                 </Link>
                 <Link
                   href="/dashboard/pomodoro"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                  className={`px-5 py-2.5 rounded-full text-sm transition-all ${
                     currentPage === 'pomodoro'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                      ? 'text-white bg-white/20 font-medium'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-light'
                   }`}
                 >
                   番茄钟
                 </Link>
                 <Link
                   href="/dashboard/projects"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                  className={`px-5 py-2.5 rounded-full text-sm transition-all ${
                     currentPage === 'projects'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                      ? 'text-white bg-white/20 font-medium'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-light'
                   }`}
                 >
                   项目
                 </Link>
                 <Link
                   href="/dashboard/habits"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                  className={`px-5 py-2.5 rounded-full text-sm transition-all ${
                     currentPage === 'habits'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                      ? 'text-white bg-white/20 font-medium'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-light'
                   }`}
                 >
                   习惯
                 </Link>
                 <Link
                   href="/dashboard/partner"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                  className={`px-5 py-2.5 rounded-full text-sm transition-all ${
                     currentPage === 'partner'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                      ? 'text-white bg-white/20 font-medium'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-light'
                   }`}
                 >
                   伴侣空间

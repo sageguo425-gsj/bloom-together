@@ -1,42 +1,77 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import type { Task } from '@/lib/types/task';
-import { usePomodoro } from '@/lib/contexts/PomodoroContext';
-import { playNotificationSound } from '@/lib/utils/audio';
+import type { PomodoroMode, PomodoroStatus } from '@/lib/types/pomodoro';
+import { usePomodoroTimer } from '@/lib/hooks/usePomodoroTimer';
+import { useMediaSession } from '@/lib/hooks/useMediaSession';
+import { useWakeLock } from '@/lib/hooks/useWakeLock';
+import { useNotification } from '@/lib/hooks/useNotification';
+import { useWhiteNoise } from '@/lib/hooks/useWhiteNoise';
+import { pomodoroService } from '@/lib/services/pomodoroService';
+import { vibrateSuccess, vibrateNotification } from '@/lib/utils/vibration';
+import { playSuccessSound, playNotificationSound } from '@/lib/utils/audio';
 import RecentSessions from './components/RecentSessions';
 import WhiteNoisePlayer from './components/WhiteNoisePlayer';
+import { WHITE_NOISES } from '@/lib/types/whiteNoise';
 
 export default function PomodoroPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // 番茄钟配置
+  const [workDuration, setWorkDuration] = useState(25);
+  const [breakDuration, setBreakDuration] = useState(5);
+  const [completedSessions, setCompletedSessions] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDurationModal, setShowDurationModal] = useState(false);
   const [showTaskSelector, setShowTaskSelector] = useState(false);
 
+  // 当前会话 ID
+  const currentSessionIdRef = useRef<string | null>(null);
+
   const router = useRouter();
   const supabase = createClient();
 
-  // 使用全局 Context
-  const {
-    pomodoroTimer,
-    selectedTask,
-    setSelectedTask,
+  // 使用自定义 hooks
+  const pomodoroTimer = usePomodoroTimer({
     workDuration,
-    setWorkDuration,
     breakDuration,
-    setBreakDuration,
-    completedSessions,
-    handleStart,
-    handlePause,
-    handleReset,
-    setUserId,
-  } = usePomodoro();
+    onComplete: handleTimerComplete,
+    onTick: handleTimerTick,
+  });
+
+  const { isSupported: isWakeLockSupported, requestWakeLock, releaseWakeLock } = useWakeLock();
+  const { showNotification, requestPermission: requestNotificationPermission } = useNotification();
+
+  // 白噪音控制
+  const { audioStates, togglePlay, setVolume } = useWhiteNoise();
+
+  // Media Session API
+  useMediaSession({
+    title: pomodoroTimer.mode === 'work' ? '专注工作中' : '休息时间',
+    artist: selectedTask?.title || '番茄钟',
+    album: 'Bloom Together',
+    onPlay: () => {
+      if (pomodoroTimer.status !== 'running') {
+        handleStart();
+      }
+    },
+    onPause: () => {
+      if (pomodoroTimer.status === 'running') {
+        handlePause();
+      }
+    },
+    onStop: () => {
+      handleReset();
+    },
+  });
 
   useEffect(() => {
     const getUser = async () => {
@@ -46,7 +81,6 @@ export default function PomodoroPage() {
         return;
       }
       setUser(user);
-      setUserId(user.id);
       await loadTasks(user.id);
       setLoading(false);
     };
@@ -93,9 +127,106 @@ export default function PomodoroPage() {
     }
   };
 
-  const handleStartWithSound = async () => {
-    await handleStart();
+  // 处理计时器每秒更新
+  function handleTimerTick(timeLeft: number) {
+    // 可以在这里添加每秒的逻辑，比如更新标题
+    if (typeof document !== 'undefined') {
+      document.title = `${formatTime(timeLeft)} - ${pomodoroTimer.mode === 'work' ? '专注' : '休息'} | Bloom Together`;
+    }
+  }
+
+  // 处理计时器完成
+  async function handleTimerComplete(mode: PomodoroMode) {
+    // 震动提醒
+    vibrateSuccess();
+
+    // 播放音效
+    playSuccessSound();
+
+    // 浏览器通知
+    const notificationTitle = mode === 'work' ? '🎉 番茄钟完成！' : '✨ 休息结束！';
+    const notificationBody = mode === 'work' ? '休息一下吧！' : '继续加油！';
+
+    showNotification(notificationTitle, {
+      body: notificationBody,
+      tag: 'pomodoro-complete',
+      requireInteraction: true,
+    });
+
+    // 保存完成的番茄钟记录
+    if (mode === 'work' && user && currentSessionIdRef.current) {
+      try {
+        await pomodoroService.completeSession(
+          currentSessionIdRef.current,
+          new Date().toISOString()
+        );
+        setCompletedSessions((prev) => prev + 1);
+      } catch (error) {
+        console.error('保存番茄钟记录失败:', error);
+      }
+      currentSessionIdRef.current = null;
+    }
+
+    // 自动切换模式
+    setTimeout(() => {
+      if (mode === 'work') {
+        pomodoroTimer.switchMode('shortBreak');
+      } else {
+        pomodoroTimer.switchMode('work');
+      }
+    }, 2000);
+  }
+
+  const handleStart = async () => {
+    // 请求 Wake Lock
+    if (isWakeLockSupported) {
+      await requestWakeLock();
+    }
+
+    // 如果是工作模式且是新会话，创建数据库记录
+    if (pomodoroTimer.mode === 'work' && pomodoroTimer.status === 'idle' && user) {
+      try {
+        const session = await pomodoroService.createSession({
+          user_id: user.id,
+          task_id: selectedTask?.id ? Number(selectedTask.id) : undefined,
+          mode: pomodoroTimer.mode,
+          duration: workDuration * 60,
+        });
+        currentSessionIdRef.current = session.id;
+      } catch (error) {
+        console.error('创建番茄钟会话失败:', error);
+      }
+    }
+
+    pomodoroTimer.start();
     playNotificationSound();
+  };
+
+  const handlePause = async () => {
+    pomodoroTimer.pause();
+
+    // 释放 Wake Lock
+    await releaseWakeLock();
+  };
+
+  const handleReset = async () => {
+    // 如果有进行中的会话，标记为中断
+    if (currentSessionIdRef.current && pomodoroTimer.mode === 'work') {
+      try {
+        await pomodoroService.interruptSession(
+          currentSessionIdRef.current,
+          new Date().toISOString()
+        );
+      } catch (error) {
+        console.error('中断番茄钟会话失败:', error);
+      }
+      currentSessionIdRef.current = null;
+    }
+
+    pomodoroTimer.reset();
+
+    // 释放 Wake Lock
+    await releaseWakeLock();
   };
 
   const handleDurationChange = (newWorkDuration: number, newBreakDuration: number) => {
@@ -114,9 +245,20 @@ export default function PomodoroPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  // 请求通知权限
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen relative flex items-center justify-center">
+        {/* 全屏背景图片 */}
         <div
           className="fixed inset-0 bg-cover bg-center bg-no-repeat -z-10"
           style={{
@@ -124,6 +266,7 @@ export default function PomodoroPage() {
             filter: 'brightness(0.85) blur(3px)',
           }}
         />
+        {/* 渐变遮罩层 */}
         <div className="fixed inset-0 bg-gradient-to-br from-emerald-900/30 via-teal-800/20 to-green-900/35 -z-10" />
 
         <div className="text-center">
@@ -157,7 +300,7 @@ export default function PomodoroPage() {
               </button>
             ) : (
               <button
-                onClick={handleStartWithSound}
+                onClick={handleStart}
                 className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-all flex items-center justify-center"
               >
                 <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 24 24">
@@ -198,6 +341,70 @@ export default function PomodoroPage() {
 
       {/* 渐变遮罩层 */}
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-900/30 via-teal-800/20 to-green-900/35 -z-10" />
+
+      {/* Header */}
+      <header className="sticky top-0 z-50 backdrop-blur-xl border-b border-white/20">
+        <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/60 via-teal-800/50 to-green-900/60"></div>
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 relative">
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center space-x-12">
+              <Link href="/dashboard" className="text-2xl font-extralight tracking-tight text-white">
+                Bloom <span className="font-light">Together</span>
+              </Link>
+              <nav className="hidden md:flex space-x-1">
+                <Link
+                  href="/dashboard"
+                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
+                >
+                  首页
+                </Link>
+                <Link
+                  href="/dashboard/tasks"
+                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
+                >
+                  任务
+                </Link>
+                <Link
+                  href="/dashboard/pomodoro"
+                  className="text-white bg-white/20 px-5 py-2.5 rounded-full font-medium text-sm transition-all"
+                >
+                  番茄钟
+                </Link>
+                <Link
+                  href="/dashboard/projects"
+                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
+                >
+                  项目
+                </Link>
+                <Link
+                  href="/dashboard/habits"
+                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
+                >
+                  习惯
+                </Link>
+                <Link
+                  href="/dashboard/partner"
+                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
+                >
+                  伴侣空间
+                </Link>
+              </nav>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <span className="hidden sm:block text-sm text-white/90 font-light">
+                {user?.user_metadata?.username || user?.email}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="px-5 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all font-light"
+              >
+                退出
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
@@ -288,7 +495,7 @@ export default function PomodoroPage() {
                     </button>
                   ) : (
                     <button
-                      onClick={handleStartWithSound}
+                      onClick={handleStart}
                       className="px-16 py-5 bg-white/95 text-emerald-700 rounded-full font-medium text-xl hover:bg-white transition-all shadow-lg hover:scale-105"
                     >
                       {pomodoroTimer.status === 'idle' ? '开始' : '继续'}

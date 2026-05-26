@@ -7,7 +7,6 @@ import { PartnerProjects } from './components/PartnerProjects'
 import { MessageBoard } from './components/MessageBoard'
 import { PartnerInvitation } from './components/PartnerInvitation'
 import { ConnectionStatus } from './components/ConnectionStatus'
-import { DashboardNav } from './components/DashboardNav'
 
 // 禁用页面缓存
 export const dynamic = 'force-dynamic'
@@ -21,20 +20,9 @@ export default async function PartnerPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen relative">
-        <div
-          className="fixed inset-0 bg-cover bg-center bg-no-repeat -z-10"
-          style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2071)',
-            filter: 'brightness(0.85) blur(3px)',
-          }}
-        />
-        <div className="fixed inset-0 bg-gradient-to-br from-emerald-900/30 via-teal-800/20 to-green-900/35 -z-10" />
-        <DashboardNav currentPage="partner" />
-        <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
-          <PartnerInvitation />
-        </main>
-      </div>
+      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
+        <PartnerInvitation />
+      </main>
     )
   }
 
@@ -48,20 +36,9 @@ export default async function PartnerPage() {
   // 如果没有伴侣，显示邀请界面
   if (!currentUser?.partner_id) {
     return (
-      <div className="min-h-screen relative">
-        <div
-          className="fixed inset-0 bg-cover bg-center bg-no-repeat -z-10"
-          style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2071)',
-            filter: 'brightness(0.85) blur(3px)',
-          }}
-        />
-        <div className="fixed inset-0 bg-gradient-to-br from-emerald-900/30 via-teal-800/20 to-green-900/35 -z-10" />
-        <DashboardNav currentPage="partner" />
-        <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
-          <PartnerInvitation />
-        </main>
-      </div>
+      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
+        <PartnerInvitation />
+      </main>
     )
   }
 
@@ -74,20 +51,9 @@ export default async function PartnerPage() {
 
   if (!partner) {
     return (
-      <div className="min-h-screen relative">
-        <div
-          className="fixed inset-0 bg-cover bg-center bg-no-repeat -z-10"
-          style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2071)',
-            filter: 'brightness(0.85) blur(3px)',
-          }}
-        />
-        <div className="fixed inset-0 bg-gradient-to-br from-emerald-900/30 via-teal-800/20 to-green-900/35 -z-10" />
-        <DashboardNav currentPage="partner" />
-        <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
-          <PartnerInvitation />
-        </main>
-      </div>
+      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
+        <PartnerInvitation />
+      </main>
     )
   }
 
@@ -116,25 +82,11 @@ export default async function PartnerPage() {
     .order('created_at', { ascending: false })
 
   return (
-    <div className="min-h-screen relative">
-      {/* 全屏背景图片 */}
-      <div
-        className="fixed inset-0 bg-cover bg-center bg-no-repeat -z-10"
-        style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2071)',
-          filter: 'brightness(0.9) blur(2px)',
-        }}
-      />
-      {/* 渐变遮罩层 - 绿色治愈系 */}
-      <div className="fixed inset-0 bg-gradient-to-br from-emerald-500/20 via-teal-400/15 to-green-500/20 -z-10" />
-
-      <DashboardNav currentPage="partner" />
-
-      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12 space-y-6">
-        {/* 伴侣信息卡片 - 磨砂玻璃效果 */}
-        <div className="backdrop-blur-xl bg-white/40 rounded-3xl shadow-2xl border border-white/50 p-8">
-          <PartnerHeader partner={partner} />
-        </div>
+    <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12 space-y-6">
+      {/* 伴侣信息卡片 - 磨砂玻璃效果 */}
+      <div className="backdrop-blur-xl bg-white/40 rounded-3xl shadow-2xl border border-white/50 p-8">
+        <PartnerHeader partner={partner} />
+      </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 左侧：伴侣的规划 */}
@@ -169,6 +121,5 @@ export default async function PartnerPage() {
           </div>
         </div>
       </main>
-    </div>
   )
 }

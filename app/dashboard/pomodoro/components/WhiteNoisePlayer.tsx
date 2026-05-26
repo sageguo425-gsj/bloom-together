@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useWhiteNoise } from '@/lib/hooks/useWhiteNoise';
+import { usePomodoro } from '@/lib/contexts/PomodoroContext';
 import { WHITE_NOISES, type WhiteNoiseMix } from '@/lib/types/whiteNoise';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
@@ -11,7 +11,8 @@ interface WhiteNoisePlayerProps {
 }
 
 export default function WhiteNoisePlayer({ user }: WhiteNoisePlayerProps) {
-  const { audioStates, initAudio, togglePlay, setVolume, stopAll, getCurrentMix, loadMix } = useWhiteNoise();
+  const { whiteNoise } = usePomodoro();
+  const { audioStates, initAudio, togglePlay, setVolume, stopAll, getCurrentMix, loadMix } = whiteNoise;
   const [savedMixes, setSavedMixes] = useState<WhiteNoiseMix[]>([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [mixName, setMixName] = useState('');

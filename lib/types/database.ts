@@ -17,9 +17,10 @@ export interface Project {
   description?: string;
   start_date: string;
   end_date: string;
-  status: 'active' | 'completed' | 'archived';
+  status: 'pending' | 'in_progress' | 'completed';
   priority: 'high' | 'medium' | 'low';
   is_shared: boolean;
+  total_tasks?: number; // 总任务量
   created_at: string;
   updated_at: string;
 }

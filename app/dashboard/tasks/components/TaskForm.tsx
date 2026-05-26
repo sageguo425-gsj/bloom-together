@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { Task, TaskFormData, TaskPriority } from '@/lib/types/task';
-import { TASK_PRIORITY_LABELS } from '@/lib/types/task';
+import type { Task, TaskFormData, TaskPriority, TaskStatus } from '@/lib/types/task';
+import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/types/task';
 import { X, Plus } from 'lucide-react';
 
 interface TaskFormProps {
@@ -23,11 +23,18 @@ interface Habit {
   icon: string;
 }
 
+interface UserTag {
+  id: number;
+  name: string;
+  color: string;
+}
+
 export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
   const [formData, setFormData] = useState<TaskFormData>({
     title: task?.title || '',
     description: task?.description || '',
     priority: task?.priority || 'medium',
+    status: task?.status || 'pending',
     tags: task?.tags || [],
     date: task?.date || new Date().toISOString().split('T')[0],
     start_time: task?.start_time || '',
@@ -40,12 +47,14 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [userTags, setUserTags] = useState<UserTag[]>([]);
   const [newTag, setNewTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
     loadProjectsAndHabits();
+    loadUserTags();
   }, []);
 
   const loadProjectsAndHabits = async () => {
@@ -61,17 +70,35 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
         .eq('status', 'active')
         .order('title');
 
-      // 加载习惯
+      // 加载习惯 - 只加载活跃的习惯
       const { data: habitsData } = await supabase
         .from('habits')
-        .select('id, title, icon')
+        .select('id, name, icon')
         .eq('user_id', user.id)
-        .order('title');
+        .eq('is_active', true)
+        .order('name');
 
       setProjects(projectsData || []);
-      setHabits(habitsData || []);
+      setHabits(habitsData?.map(h => ({ id: h.id, title: h.name, icon: h.icon })) || []);
     } catch (error) {
       console.error('加载项目和习惯失败:', error);
+    }
+  };
+
+  const loadUserTags = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: tagsData } = await supabase
+        .from('user_tags')
+        .select('id, name, color')
+        .eq('user_id', user.id)
+        .order('name');
+
+      setUserTags(tagsData || []);
+    } catch (error) {
+      console.error('加载用户标签失败:', error);
     }
   };
 
@@ -96,16 +123,53 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
     onSubmit(formData);
   };
 
-  const addTag = () => {
+  const addTag = async () => {
     const trimmedTag = newTag.trim();
-    if (trimmedTag && !formData.tags.includes(trimmedTag as any)) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, trimmedTag as any],
-      }));
+    if (!trimmedTag) return;
+
+    // 检查标签是否已经在任务中
+    if (formData.tags.includes(trimmedTag as any)) {
       setNewTag('');
       setShowTagInput(false);
+      return;
     }
+
+    // 检查标签是否已存在于用户标签库中
+    const existingTag = userTags.find(t => t.name === trimmedTag);
+
+    if (!existingTag) {
+      // 创建新标签到数据库
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: newTagData, error } = await supabase
+          .from('user_tags')
+          .insert([{ user_id: user.id, name: trimmedTag, color: '#10b981' }])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('创建标签失败:', error);
+          alert('创建标签失败，请重试');
+          return;
+        }
+
+        // 添加到用户标签列表
+        setUserTags([...userTags, newTagData]);
+      } catch (error) {
+        console.error('创建标签失败:', error);
+        return;
+      }
+    }
+
+    // 添加标签到当前任务
+    setFormData(prev => ({
+      ...prev,
+      tags: [...prev.tags, trimmedTag as any],
+    }));
+    setNewTag('');
+    setShowTagInput(false);
   };
 
   const removeTag = (tagToRemove: string) => {
@@ -228,6 +292,33 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
             </p>
           </div>
 
+          {/* 任务状态 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              任务状态
+            </label>
+            <div className="flex gap-3">
+              {(['pending', 'in_progress', 'completed'] as TaskStatus[]).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, status })}
+                  className={`flex-1 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
+                    formData.status === status
+                      ? status === 'pending'
+                        ? 'bg-gray-500 text-white shadow-lg'
+                        : status === 'in_progress'
+                        ? 'bg-blue-500 text-white shadow-lg'
+                        : 'bg-green-500 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {TASK_STATUS_LABELS[status]}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 优先级 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -260,6 +351,8 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
             <label className="block text-sm font-medium text-gray-700 mb-3">
               标签
             </label>
+
+            {/* 已选标签 */}
             <div className="flex flex-wrap gap-2 mb-3">
               {formData.tags.map((tag) => (
                 <div
@@ -276,19 +369,56 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                   </button>
                 </div>
               ))}
+            </div>
 
+            {/* 可选标签列表 */}
+            {userTags.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs text-gray-600 mb-2">选择已有标签：</p>
+                <div className="flex flex-wrap gap-2">
+                  {userTags
+                    .filter(tag => !formData.tags.includes(tag.name as any))
+                    .map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          tags: [...prev.tags, tag.name as any]
+                        }))}
+                        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors"
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* 添加新标签 */}
+            <div className="flex items-center gap-2">
               {showTagInput ? (
-                <div className="inline-flex items-center gap-1">
+                <div className="flex items-center gap-2 flex-1">
                   <input
                     type="text"
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                     onBlur={addTag}
-                    placeholder="输入标签..."
-                    className="px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent w-32"
+                    placeholder="输入新标签名称..."
+                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     autoFocus
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTagInput(false);
+                      setNewTag('');
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               ) : (
                 <button
@@ -297,12 +427,12 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors"
                 >
                   <Plus className="w-3 h-3" />
-                  添加标签
+                  创建新标签
                 </button>
               )}
             </div>
-            <p className="text-xs text-gray-500">
-              点击标签上的 × 可以删除，点击"添加标签"可以创建自定义标签
+            <p className="text-xs text-gray-500 mt-2">
+              创建的标签会保存到标签库，可在所有任务中使用
             </p>
           </div>
 

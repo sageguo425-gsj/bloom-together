@@ -53,11 +53,6 @@ export default function HabitsPage() {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-  };
-
   const handleCreateHabit = async (formData: any) => {
     if (!user) return;
 
@@ -249,70 +244,6 @@ export default function HabitsPage() {
 
       {/* 渐变遮罩层 */}
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-900/30 via-teal-800/20 to-green-900/35 -z-10" />
-
-      {/* Header - 毛玻璃效果 */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl border-b border-white/20">
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/60 via-teal-800/50 to-green-900/60"></div>
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 relative">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center space-x-12">
-              <Link href="/dashboard" className="text-2xl font-extralight tracking-tight text-white">
-                Bloom <span className="font-light">Together</span>
-              </Link>
-              <nav className="hidden md:flex space-x-1">
-                <Link
-                  href="/dashboard"
-                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
-                >
-                  首页
-                </Link>
-                <Link
-                  href="/dashboard/tasks"
-                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
-                >
-                  任务
-                </Link>
-                <Link
-                  href="/dashboard/pomodoro"
-                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
-                >
-                  番茄钟
-                </Link>
-                <Link
-                  href="/dashboard/projects"
-                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
-                >
-                  项目
-                </Link>
-                <Link
-                  href="/dashboard/habits"
-                  className="text-white bg-white/20 px-5 py-2.5 rounded-full font-medium text-sm transition-all"
-                >
-                  习惯
-                </Link>
-                <Link
-                  href="/dashboard/partner"
-                  className="text-white/80 hover:text-white px-5 py-2.5 rounded-full hover:bg-white/10 transition-all text-sm"
-                >
-                  伴侣空间
-                </Link>
-              </nav>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <span className="hidden sm:block text-sm text-white/90 font-light">
-                {user?.user_metadata?.username || user?.email}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="px-5 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all font-light"
-              >
-                退出
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 lg:px-8 py-8">

@@ -6,7 +6,8 @@ export interface PomodoroSessionData {
   task_id?: number;
   mode: PomodoroMode;
   duration: number;
-  completed_at?: string;
+  started_at?: string;
+  ended_at?: string;
   interrupted_at?: string;
 }
 
@@ -22,13 +23,19 @@ export interface PomodoroStats {
 class PomodoroService {
   private supabase = createClient();
 
-  async createSession(data: Omit<PomodoroSessionData, 'completed_at' | 'interrupted_at'>) {
+  async createSession(data: Omit<PomodoroSessionData, 'ended_at' | 'interrupted_at'>) {
     try {
       console.log('Creating pomodoro session with data:', data);
 
+      // 添加 started_at 如果没有提供
+      const sessionData = {
+        ...data,
+        started_at: data.started_at || new Date().toISOString(),
+      };
+
       const { data: session, error } = await this.supabase
         .from('pomodoro_sessions')
-        .insert([data])
+        .insert([sessionData])
         .select()
         .single();
 
@@ -46,12 +53,13 @@ class PomodoroService {
     }
   }
 
-  async completeSession(sessionId: string, completedAt: string) {
+  async completeSession(sessionId: string, endedAt: string) {
     try {
       const { data, error } = await this.supabase
         .from('pomodoro_sessions')
         .update({
-          completed_at: completedAt,
+          completed: true,
+          ended_at: endedAt,
         })
         .eq('id', sessionId)
         .select()
@@ -94,18 +102,18 @@ class PomodoroService {
 
       if (allError) throw allError;
 
-      const completedSessions = allSessions?.filter((s) => s.completed_at) || [];
+      const completedSessions = allSessions?.filter((s) => s.completed) || [];
       const totalFocusTime = completedSessions.reduce((sum, s) => sum + s.duration, 0);
 
       const today = new Date().toISOString().split('T')[0];
       const todaySessions = allSessions?.filter(
-        (s) => s.completed_at && s.completed_at.startsWith(today)
+        (s) => s.completed && s.ended_at && s.ended_at.startsWith(today)
       ).length || 0;
 
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       const weekSessions = allSessions?.filter(
-        (s) => s.completed_at && new Date(s.completed_at) >= weekAgo
+        (s) => s.completed && s.ended_at && new Date(s.ended_at) >= weekAgo
       ).length || 0;
 
       const completionRate = allSessions?.length
@@ -139,7 +147,7 @@ class PomodoroService {
         .from('pomodoro_sessions')
         .select('*')
         .eq('task_id', taskId)
-        .order('completed_at', { ascending: false });
+        .order('ended_at', { ascending: false });
 
       if (error) throw error;
       return data || [];
@@ -163,14 +171,47 @@ class PomodoroService {
 
   async getRecentSessions(userId: string, limit: number = 10) {
     try {
+      console.log('Fetching recent sessions for user:', userId);
+
       const { data, error } = await this.supabase
         .from('pomodoro_sessions')
         .select('*')
         .eq('user_id', userId)
-        .order('completed_at', { ascending: false })
+        .order('started_at', { ascending: false })
         .limit(limit);
 
-      if (error) throw error;
+      if (error) {
+        console.error('获取最近番茄钟记录失败 - Supabase error:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+
+      console.log('Fetched sessions:', data);
+
+      // 手动加载关联的任务信息
+      if (data && data.length > 0) {
+        const taskIds = data.filter(s => s.task_id).map(s => s.task_id);
+        console.log('Task IDs to fetch:', taskIds);
+
+        if (taskIds.length > 0) {
+          const { data: tasks, error: tasksError } = await this.supabase
+            .from('tasks')
+            .select('id, title')
+            .in('id', taskIds);
+
+          if (tasksError) {
+            console.error('获取任务信息失败:', JSON.stringify(tasksError, null, 2));
+          }
+
+          console.log('Fetched tasks:', tasks);
+
+          // 将任务信息附加到会话数据
+          return data.map(session => ({
+            ...session,
+            tasks: session.task_id && tasks ? tasks.find(t => t.id === session.task_id) : null
+          }));
+        }
+      }
+
       return data || [];
     } catch (error) {
       console.error('获取最近番茄钟记录失败:', error);

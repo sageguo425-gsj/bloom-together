@@ -33,7 +33,19 @@ export default function RecentSessions({ user }: RecentSessionsProps) {
   const loadSessions = async () => {
     try {
       const data = await pomodoroService.getRecentSessions(user.id, 10);
-      setSessions(data);
+
+      // 只显示当日完成的番茄钟（排除中断的和前几天的）
+      const today = new Date().toISOString().split('T')[0];
+      const filteredSessions = data.filter(session => {
+        // 必须是已完成的
+        if (!session.completed) return false;
+
+        // 必须是当日的
+        const sessionDate = new Date(session.started_at).toISOString().split('T')[0];
+        return sessionDate === today;
+      });
+
+      setSessions(filteredSessions);
     } catch (error) {
       console.error('加载最近会话失败:', error);
     } finally {
@@ -112,8 +124,10 @@ export default function RecentSessions({ user }: RecentSessionsProps) {
                   {session.tasks?.title || session.projects?.name || '未关联任务'}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {session.started_at && !isNaN(new Date(session.started_at).getTime())
-                    ? format(new Date(session.started_at), 'MM月dd日 HH:mm', { locale: zhCN })
+                  {session.started_at && session.ended_at &&
+                   !isNaN(new Date(session.started_at).getTime()) &&
+                   !isNaN(new Date(session.ended_at).getTime())
+                    ? `${format(new Date(session.started_at), 'HH:mm', { locale: zhCN })}-${format(new Date(session.ended_at), 'HH:mm', { locale: zhCN })}`
                     : '时间未知'}
                 </p>
               </div>

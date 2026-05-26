@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Task } from '@/lib/types/task';
-import { TASK_PRIORITY_LABELS, TASK_TAG_LABELS, TASK_TAG_COLORS } from '@/lib/types/task';
+import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_TAG_LABELS, TASK_TAG_COLORS } from '@/lib/types/task';
 
 interface TaskCardProps {
   task: Task;
@@ -95,9 +95,7 @@ export default function TaskCard({
             <span
               className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}
             >
-              {task.status === 'pending' && '待办'}
-              {task.status === 'in_progress' && '进行中'}
-              {task.status === 'completed' && '已完成'}
+              {TASK_STATUS_LABELS[task.status]}
             </span>
           </div>
 
@@ -141,9 +139,11 @@ export default function TaskCard({
               {task.tags.map((tag) => (
                 <span
                   key={tag}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium border ${TASK_TAG_COLORS[tag]}`}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    TASK_TAG_COLORS[tag] || 'bg-gray-100 text-gray-700 border-gray-300'
+                  }`}
                 >
-                  {TASK_TAG_LABELS[tag]}
+                  {TASK_TAG_LABELS[tag] || tag}
                 </span>
               ))}
             </div>
