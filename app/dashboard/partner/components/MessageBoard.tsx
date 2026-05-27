@@ -30,20 +30,36 @@ export function MessageBoard() {
   const emojiPickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    loadMessages()
-    markMessagesAsRead()
-    loadUserInfo()
+    let mounted = true
+
+    const init = async () => {
+      if (mounted) {
+        await loadMessages()
+        await markMessagesAsRead()
+        await loadUserInfo()
+      }
+    }
+
+    init()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const loadUserInfo = async () => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      setCurrentUserId(user.id)
-    }
-    const partner = await getPartnerProfile()
-    if (partner) {
-      setPartnerId(partner.id)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+      }
+      const partner = await getPartnerProfile()
+      if (partner) {
+        setPartnerId(partner.id)
+      }
+    } catch (error) {
+      console.error('加载用户信息失败:', error)
     }
   }
 
@@ -68,8 +84,12 @@ export function MessageBoard() {
   }, [showEmojiPicker])
 
   const loadMessages = async () => {
-    const data = await getMessages()
-    setMessages(data)
+    try {
+      const data = await getMessages()
+      setMessages(data)
+    } catch (error) {
+      console.error('加载留言失败:', error)
+    }
   }
 
   const handleSend = async (e?: React.MouseEvent) => {
@@ -157,7 +177,7 @@ export function MessageBoard() {
                         {message.content}
                       </p>
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5 px-1">
+                    <p className="text-xs text-gray-300 mt-0.5 px-1">
                       {formatMessageTime(message.created_at)}
                     </p>
                   </div>
