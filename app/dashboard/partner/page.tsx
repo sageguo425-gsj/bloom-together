@@ -69,6 +69,7 @@ export default async function PartnerPage() {
 
   // 获取伴侣当日完成的任务（使用本地时区）
   const now = new Date();
+  const today = now.toISOString().split('T')[0]; // 保留 today 变量供后续使用
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
