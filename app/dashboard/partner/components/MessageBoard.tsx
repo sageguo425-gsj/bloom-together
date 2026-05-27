@@ -105,18 +105,7 @@ export function MessageBoard() {
 
   const formatMessageTime = (dateString: string) => {
     const date = new Date(dateString)
-    const now = new Date()
-    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (diffInDays === 0) {
-      return format(date, 'HH:mm', { locale: zhCN })
-    } else if (diffInDays === 1) {
-      return '昨天 ' + format(date, 'HH:mm', { locale: zhCN })
-    } else if (diffInDays < 7) {
-      return format(date, 'EEEE HH:mm', { locale: zhCN })
-    } else {
-      return format(date, 'MM-dd HH:mm', { locale: zhCN })
-    }
+    return format(date, 'yyyy-MM-dd HH:mm', { locale: zhCN })
   }
 
   return (
@@ -163,10 +152,10 @@ export function MessageBoard() {
                           : 'bg-white text-gray-900'
                       }`}
                     >
-                      {message.emoji && (
-                        <span className="text-xl mb-0.5 block">{message.emoji}</span>
-                      )}
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                        {message.emoji && <span className="text-xl mr-1">{message.emoji}</span>}
+                        {message.content}
+                      </p>
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5 px-1">
                       {formatMessageTime(message.created_at)}
