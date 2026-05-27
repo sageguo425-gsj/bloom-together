@@ -67,15 +67,19 @@ export default async function PartnerPage() {
     .order('start_time', { ascending: true })
     .limit(50)
 
-  // 获取伴侣当日完成的任务
-  const today = new Date().toISOString().split('T')[0];
+  // 获取伴侣当日完成的任务（使用本地时区）
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
   const { data: completedTodayTasks } = await supabase
     .from('tasks')
     .select('*')
     .eq('user_id', partner.id)
     .eq('status', 'completed')
-    .gte('completed_at', `${today}T00:00:00`)
-    .lte('completed_at', `${today}T23:59:59`)
+    .not('completed_at', 'is', null)
+    .gte('completed_at', todayStart.toISOString())
+    .lte('completed_at', todayEnd.toISOString())
     .order('completed_at', { ascending: false })
     .limit(50)
 
