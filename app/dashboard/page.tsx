@@ -760,7 +760,7 @@ export default function DashboardPage() {
                     borderRadius: '8px',
                     fontSize: '12px'
                   }}
-                  formatter={(value: number) => [`${value} 分钟`, '专注时长']}
+                  formatter={(value: any) => [`${value} 分钟`, '专注时长']}
                 />
                 <Line
                   type="monotone"
@@ -797,7 +797,7 @@ export default function DashboardPage() {
                     borderRadius: '8px',
                     fontSize: '12px'
                   }}
-                  formatter={(value: number) => [`${value} 分钟`, '专注时长']}
+                  formatter={(value: any) => [`${value} 分钟`, '专注时长']}
                 />
                 <Bar
                   dataKey="minutes"
