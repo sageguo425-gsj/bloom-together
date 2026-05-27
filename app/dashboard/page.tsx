@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import type { Task } from '@/lib/types/task';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Label, LabelList } from 'recharts';
 
 interface HabitStats {
   totalHabits: number;
@@ -21,7 +21,7 @@ interface ProjectStats {
 interface PomodoroStats {
   todayFocusTime: number; // 今日专注时长（分钟）
   weeklyData: { date: string; minutes: number }[]; // 本周数据
-  monthlyData: { week: string; minutes: number }[]; // 本月数据
+  monthlyData: { week: string; minutes: number; dateRange: string }[]; // 本月数据（添加日期范围）
 }
 
 export default function DashboardPage() {
@@ -267,9 +267,18 @@ export default function DashboardPage() {
           .lte('started_at', `${endDate.toISOString().split('T')[0]}T23:59:59`);
 
         const minutes = Math.round((weekData?.reduce((sum, s) => sum + s.duration, 0) || 0) / 60);
+
+        // 格式化日期范围
+        const startMonth = currentWeekStart.getMonth() + 1;
+        const startDay = currentWeekStart.getDate();
+        const endMonth = endDate.getMonth() + 1;
+        const endDay = endDate.getDate();
+        const dateRange = `${startMonth}月${startDay}日-${endMonth}月${endDay}日`;
+
         monthlyData.push({
           week: `第${weekNum}周`,
-          minutes
+          minutes,
+          dateRange
         });
 
         currentWeekStart.setDate(currentWeekStart.getDate() + 7);
@@ -738,25 +747,25 @@ export default function DashboardPage() {
         {/* 专注时长统计图表 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 本周专注时长 - 折线图 */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl border border-blue-300 p-6 shadow-md">
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md">
             <h3 className="text-xl font-light text-gray-900 mb-6">本周专注时长</h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={pomodoroStats.weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#d1fae5" />
                 <XAxis
                   dataKey="date"
-                  stroke="#6366f1"
+                  stroke="#10b981"
                   style={{ fontSize: '12px' }}
                 />
                 <YAxis
-                  stroke="#6366f1"
+                  stroke="#10b981"
                   style={{ fontSize: '12px' }}
                   label={{ value: '分钟', angle: -90, position: 'insideLeft', style: { fontSize: '12px' } }}
                 />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    border: '1px solid #e0e7ff',
+                    border: '1px solid #d1fae5',
                     borderRadius: '8px',
                     fontSize: '12px'
                   }}
@@ -765,45 +774,60 @@ export default function DashboardPage() {
                 <Line
                   type="monotone"
                   dataKey="minutes"
-                  stroke="#6366f1"
+                  stroke="#10b981"
                   strokeWidth={3}
-                  dot={{ fill: '#6366f1', r: 5 }}
+                  dot={{ fill: '#10b981', r: 5 }}
                   activeDot={{ r: 7 }}
-                />
+                >
+                  <LabelList
+                    dataKey="minutes"
+                    position="top"
+                    style={{ fill: '#059669', fontSize: '12px', fontWeight: 'bold' }}
+                  />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {/* 本月专注时长 - 条形图 */}
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-3xl border border-purple-300 p-6 shadow-md">
+          <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-3xl border border-teal-300 p-6 shadow-md">
             <h3 className="text-xl font-light text-gray-900 mb-6">本月专注时长</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={pomodoroStats.monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3e8ff" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#ccfbf1" />
                 <XAxis
                   dataKey="week"
-                  stroke="#a855f7"
+                  stroke="#14b8a6"
                   style={{ fontSize: '12px' }}
                 />
                 <YAxis
-                  stroke="#a855f7"
+                  stroke="#14b8a6"
                   style={{ fontSize: '12px' }}
                   label={{ value: '分钟', angle: -90, position: 'insideLeft', style: { fontSize: '12px' } }}
                 />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    border: '1px solid #f3e8ff',
+                    border: '1px solid #ccfbf1',
                     borderRadius: '8px',
                     fontSize: '12px'
                   }}
-                  formatter={(value: any) => [`${value} 分钟`, '专注时长']}
+                  formatter={(value: any, name: any, props: any) => {
+                    const dateRange = props.payload.dateRange;
+                    return [`${value} 分钟 (${dateRange})`, '专注时长'];
+                  }}
                 />
                 <Bar
                   dataKey="minutes"
-                  fill="#a855f7"
+                  fill="#14b8a6"
                   radius={[8, 8, 0, 0]}
-                />
+                >
+                  <LabelList
+                    dataKey="minutes"
+                    position="top"
+                    style={{ fill: '#0f766e', fontSize: '12px', fontWeight: 'bold' }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
