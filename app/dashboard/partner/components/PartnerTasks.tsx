@@ -98,12 +98,12 @@ export function PartnerTasks({ allTasks: initialAllTasks, completedTodayTasks: i
 
   return (
     <div className="space-y-8">
-      {/* 所有任务 */}
+      {/* 未完成任务 */}
       <div>
-        <h2 className="text-2xl font-bold mb-4 text-emerald-900">所有任务</h2>
+        <h2 className="text-2xl font-bold mb-4 text-emerald-900">未完成任务</h2>
         {allTasks.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-emerald-700/70">伴侣暂无任务</p>
+            <p className="text-emerald-700/70">伴侣暂无未完成任务</p>
           </div>
         ) : (
           <div className="space-y-2">

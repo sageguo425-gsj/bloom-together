@@ -57,11 +57,12 @@ export default async function PartnerPage() {
     )
   }
 
-  // 获取伴侣的所有任务（用于显示所有任务）
+  // 获取伴侣所有尚未完成的任务
   const { data: allTasks } = await supabase
     .from('tasks')
     .select('*')
     .eq('user_id', partner.id)
+    .in('status', ['pending', 'in_progress'])
     .order('date', { ascending: true })
     .order('start_time', { ascending: true })
     .limit(50)
