@@ -57,9 +57,18 @@ export default async function PartnerPage() {
     )
   }
 
-  // 获取伴侣的所有当日完成的任务
+  // 获取伴侣的所有任务（用于显示所有任务）
+  const { data: allTasks } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', partner.id)
+    .order('date', { ascending: true })
+    .order('start_time', { ascending: true })
+    .limit(50)
+
+  // 获取伴侣当日完成的任务
   const today = new Date().toISOString().split('T')[0];
-  const { data: tasks } = await supabase
+  const { data: completedTodayTasks } = await supabase
     .from('tasks')
     .select('*')
     .eq('user_id', partner.id)
@@ -213,7 +222,7 @@ export default async function PartnerPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* 任务列表 - 磨砂玻璃 */}
             <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-3xl shadow-xl border border-white/60 p-6">
-              <PartnerTasks tasks={tasks || []} />
+              <PartnerTasks allTasks={allTasks || []} completedTodayTasks={completedTodayTasks || []} />
             </div>
 
             {/* 习惯打卡 - 磨砂玻璃 */}

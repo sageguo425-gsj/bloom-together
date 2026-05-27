@@ -55,6 +55,10 @@ export interface Message {
   emoji?: string
   is_read: boolean
   created_at: string
+  sender?: {
+    username: string
+    avatar?: string
+  }
 }
 
 export interface SharedGoal {
@@ -324,7 +328,13 @@ export async function getMessages(): Promise<Message[]> {
 
   const { data: messages } = await supabase
     .from('messages')
-    .select('*')
+    .select(`
+      *,
+      sender:sender_id (
+        username,
+        avatar
+      )
+    `)
     .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
     .order('created_at', { ascending: true })
     .limit(100)
