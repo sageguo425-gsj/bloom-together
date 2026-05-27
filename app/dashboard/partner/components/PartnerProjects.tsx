@@ -28,38 +28,39 @@ export function PartnerProjects({ projects }: PartnerProjectsProps) {
           <p className="text-emerald-700/70 text-lg">伴侣还没有项目</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-4">
           {projects.map(project => (
             <div
               key={project.id}
-              className="bg-white/60 backdrop-blur-sm border border-emerald-100/50 shadow-sm rounded-lg p-3 hover:border-emerald-200 hover:shadow-md transition-all"
+              className="bg-white/80 backdrop-blur-sm border border-emerald-100/50 shadow-sm rounded-2xl p-5 hover:border-emerald-200 hover:shadow-md transition-all"
             >
-              <div className="flex items-center gap-3">
-                <Folder className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center flex-shrink-0">
+                  <Folder className="w-5 h-5 text-emerald-600" />
+                </div>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 text-sm truncate mb-1">{project.title}</h3>
+                  <h3 className="font-medium text-gray-900 text-base mb-1">{project.title}</h3>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Calendar className="w-3 h-3" />
+                    <Calendar className="w-3.5 h-3.5" />
                     <span>
                       {format(new Date(project.start_date), 'MM/dd', { locale: zhCN })} - {format(new Date(project.end_date), 'MM/dd', { locale: zhCN })}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  {getStatusBadge(project.status)}
+                {getStatusBadge(project.status)}
+              </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="w-20 bg-gray-200 rounded-full h-1.5">
-                      <div
-                        className="bg-emerald-600 h-1.5 rounded-full transition-all duration-500"
-                        style={{ width: `${project.progress}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-emerald-600 w-8 text-right">{project.progress}%</span>
-                  </div>
+              {/* 进度条 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-emerald-500 to-teal-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${project.progress}%` }}
+                  />
                 </div>
+                <span className="text-sm font-semibold text-emerald-600 min-w-[45px] text-right">{project.progress}%</span>
               </div>
             </div>
           ))}
