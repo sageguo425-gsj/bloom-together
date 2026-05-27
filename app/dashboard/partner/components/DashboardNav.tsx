@@ -231,8 +231,9 @@ export function DashboardNav() {
 
         {/* 移动端导航菜单 */}
         {showMobileMenu && (
-          <div className="md:hidden border-t border-white/20">
-            <nav className="px-4 py-4 space-y-2">
+          <div className="md:hidden border-t border-white/20 relative z-50">
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/95 via-teal-800/95 to-green-900/95"></div>
+            <nav className="relative px-4 py-4 space-y-2">
               <Link
                 href="/dashboard"
                 onClick={() => setShowMobileMenu(false)}
