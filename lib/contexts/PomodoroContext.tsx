@@ -41,10 +41,69 @@ const PomodoroContext = createContext<PomodoroContextType | undefined>(undefined
 export function PomodoroProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [workDuration, setWorkDuration] = useState(25);
-  const [breakDuration, setBreakDuration] = useState(5);
+  const [workDuration, setWorkDurationState] = useState(25);
+  const [breakDuration, setBreakDurationState] = useState(5);
   const [completedSessions, setCompletedSessions] = useState(0);
   const currentSessionIdRef = useRef<string | null>(null);
+
+  // 从 localStorage 加载设置
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedWorkDuration = localStorage.getItem('pomodoro_work_duration');
+      const savedBreakDuration = localStorage.getItem('pomodoro_break_duration');
+
+      if (savedWorkDuration) {
+        setWorkDurationState(parseInt(savedWorkDuration));
+      }
+      if (savedBreakDuration) {
+        setBreakDurationState(parseInt(savedBreakDuration));
+      }
+    }
+  }, []);
+
+  // 保存设置到 localStorage
+  const setWorkDuration = (duration: number) => {
+    setWorkDurationState(duration);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoro_work_duration', duration.toString());
+    }
+  };
+
+  const setBreakDuration = (duration: number) => {
+    setBreakDurationState(duration);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoro_break_duration', duration.toString());
+    }
+  };
+
+  // 加载今日完成的番茄钟数量
+  useEffect(() => {
+    const loadTodayCompletedSessions = async () => {
+      if (!userId) return;
+
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+
+        const { data, error } = await supabase
+          .from('pomodoro_sessions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('completed', true)
+          .gte('started_at', `${today}T00:00:00`)
+          .lte('started_at', `${today}T23:59:59`);
+
+        if (!error && data) {
+          setCompletedSessions(data.length);
+        }
+      } catch (error) {
+        console.error('加载今日完成番茄钟数量失败:', error);
+      }
+    };
+
+    loadTodayCompletedSessions();
+  }, [userId]);
 
   // Hooks
   const { isSupported: isWakeLockSupported, requestWakeLock, releaseWakeLock } = useWakeLock();
