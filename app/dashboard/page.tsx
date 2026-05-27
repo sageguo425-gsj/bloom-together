@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import type { Task } from '@/lib/types/task';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface HabitStats {
   totalHabits: number;
@@ -19,6 +20,8 @@ interface ProjectStats {
 
 interface PomodoroStats {
   todayFocusTime: number; // 今日专注时长（分钟）
+  weeklyData: { date: string; minutes: number }[]; // 本周数据
+  monthlyData: { week: string; minutes: number }[]; // 本月数据
 }
 
 export default function DashboardPage() {
@@ -27,7 +30,11 @@ export default function DashboardPage() {
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [habitStats, setHabitStats] = useState<HabitStats>({ totalHabits: 0, checkedToday: 0, currentStreak: 0 });
   const [projectStats, setProjectStats] = useState<ProjectStats>({ activeProjects: 0 });
-  const [pomodoroStats, setPomodoroStats] = useState<PomodoroStats>({ todayFocusTime: 0 });
+  const [pomodoroStats, setPomodoroStats] = useState<PomodoroStats>({
+    todayFocusTime: 0,
+    weeklyData: [],
+    monthlyData: []
+  });
   const [partnerInfo, setPartnerInfo] = useState<{ username: string; avatar?: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const router = useRouter();
@@ -191,10 +198,11 @@ export default function DashboardPage() {
 
   const loadPomodoroStats = async (userId: string) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
 
       // 获取今日完成的番茄钟会话
-      const { data, error } = await supabase
+      const { data: todayData, error: todayError } = await supabase
         .from('pomodoro_sessions')
         .select('duration')
         .eq('user_id', userId)
@@ -202,20 +210,84 @@ export default function DashboardPage() {
         .gte('started_at', `${today}T00:00:00`)
         .lte('started_at', `${today}T23:59:59`);
 
-      if (error) {
-        console.error('获取番茄钟统计失败:', error);
-        setPomodoroStats({ todayFocusTime: 0 });
-        return;
+      if (todayError) {
+        console.error('获取今日番茄钟统计失败:', todayError);
       }
 
-      // 计算总专注时长（秒转分钟）
-      const totalSeconds = data?.reduce((sum, session) => sum + session.duration, 0) || 0;
-      const totalMinutes = Math.round(totalSeconds / 60);
+      // 计算今日总专注时长（秒转分钟）
+      const todaySeconds = todayData?.reduce((sum, session) => sum + session.duration, 0) || 0;
+      const todayMinutes = Math.round(todaySeconds / 60);
 
-      setPomodoroStats({ todayFocusTime: totalMinutes });
+      // 获取本周数据（周一到周日）
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)); // 周一
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weeklyData = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(weekStart);
+        date.setDate(weekStart.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+
+        const { data: dayData } = await supabase
+          .from('pomodoro_sessions')
+          .select('duration')
+          .eq('user_id', userId)
+          .eq('completed', true)
+          .gte('started_at', `${dateStr}T00:00:00`)
+          .lte('started_at', `${dateStr}T23:59:59`);
+
+        const minutes = Math.round((dayData?.reduce((sum, s) => sum + s.duration, 0) || 0) / 60);
+        weeklyData.push({
+          date: date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }),
+          minutes
+        });
+      }
+
+      // 获取本月数据（按周统计）
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const monthlyData = [];
+      let weekNum = 1;
+      let currentWeekStart = new Date(monthStart);
+
+      while (currentWeekStart <= monthEnd) {
+        const currentWeekEnd = new Date(currentWeekStart);
+        currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+
+        const endDate = currentWeekEnd > monthEnd ? monthEnd : currentWeekEnd;
+
+        const { data: weekData } = await supabase
+          .from('pomodoro_sessions')
+          .select('duration')
+          .eq('user_id', userId)
+          .eq('completed', true)
+          .gte('started_at', currentWeekStart.toISOString())
+          .lte('started_at', `${endDate.toISOString().split('T')[0]}T23:59:59`);
+
+        const minutes = Math.round((weekData?.reduce((sum, s) => sum + s.duration, 0) || 0) / 60);
+        monthlyData.push({
+          week: `第${weekNum}周`,
+          minutes
+        });
+
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        weekNum++;
+      }
+
+      setPomodoroStats({
+        todayFocusTime: todayMinutes,
+        weeklyData,
+        monthlyData
+      });
     } catch (error) {
       console.error('加载番茄钟统计失败:', error);
-      setPomodoroStats({ todayFocusTime: 0 });
+      setPomodoroStats({
+        todayFocusTime: 0,
+        weeklyData: [],
+        monthlyData: []
+      });
     }
   };
 
@@ -431,10 +503,10 @@ export default function DashboardPage() {
         </div>
 
         {/* 任务和时间轴视图 - 非对称布局 */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* 今日任务列表 - 占2列 */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+          {/* 今日任务列表 - 占2列，高度与每日日程一致 */}
           <div className="lg:col-span-2">
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md">
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md h-full flex flex-col">
               {/* 头部 */}
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-light text-gray-900">今日任务</h3>
@@ -461,8 +533,8 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* 任务列表 */}
-              <div className="space-y-3 max-h-[500px] overflow-y-auto">
+              {/* 任务列表 - 使用 flex-1 填充剩余空间 */}
+              <div className="space-y-3 flex-1 overflow-y-auto">
                 {todayTasks.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="w-16 h-16 rounded-2xl bg-white/80 flex items-center justify-center mx-auto mb-4 shadow-sm">
@@ -660,6 +732,80 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* 专注时长统计图表 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* 本周专注时长 - 折线图 */}
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl border border-blue-300 p-6 shadow-md">
+            <h3 className="text-xl font-light text-gray-900 mb-6">本周专注时长</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={pomodoroStats.weeklyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                <XAxis
+                  dataKey="date"
+                  stroke="#6366f1"
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis
+                  stroke="#6366f1"
+                  style={{ fontSize: '12px' }}
+                  label={{ value: '分钟', angle: -90, position: 'insideLeft', style: { fontSize: '12px' } }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    border: '1px solid #e0e7ff',
+                    borderRadius: '8px',
+                    fontSize: '12px'
+                  }}
+                  formatter={(value: number) => [`${value} 分钟`, '专注时长']}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="minutes"
+                  stroke="#6366f1"
+                  strokeWidth={3}
+                  dot={{ fill: '#6366f1', r: 5 }}
+                  activeDot={{ r: 7 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* 本月专注时长 - 条形图 */}
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-3xl border border-purple-300 p-6 shadow-md">
+            <h3 className="text-xl font-light text-gray-900 mb-6">本月专注时长</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={pomodoroStats.monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3e8ff" />
+                <XAxis
+                  dataKey="week"
+                  stroke="#a855f7"
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis
+                  stroke="#a855f7"
+                  style={{ fontSize: '12px' }}
+                  label={{ value: '分钟', angle: -90, position: 'insideLeft', style: { fontSize: '12px' } }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    border: '1px solid #f3e8ff',
+                    borderRadius: '8px',
+                    fontSize: '12px'
+                  }}
+                  formatter={(value: number) => [`${value} 分钟`, '专注时长']}
+                />
+                <Bar
+                  dataKey="minutes"
+                  fill="#a855f7"
+                  radius={[8, 8, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </main>
