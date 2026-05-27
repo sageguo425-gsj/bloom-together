@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Task } from '@/lib/types/task';
 
 interface PomodoroModalProps {
@@ -8,10 +8,64 @@ interface PomodoroModalProps {
   onClose: () => void;
 }
 
+// 右下角通知组件
+function Toast({ message, emoji, onClose }: { message: string; emoji: string; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 5000); // 5秒后自动关闭
+
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div className="fixed bottom-6 right-6 z-[100] animate-slide-in-right">
+      <div className="bg-white rounded-2xl shadow-2xl border border-emerald-200 p-4 min-w-[300px] max-w-[400px]">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+            <span className="text-2xl">{emoji}</span>
+          </div>
+          <div className="flex-1">
+            <p className="text-gray-900 font-medium mb-1">番茄钟提醒</p>
+            <p className="text-gray-600 text-sm">{message}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PomodoroModal({ task, onClose }: PomodoroModalProps) {
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [mode, setMode] = useState<'work' | 'break'>('work');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastEmoji, setToastEmoji] = useState('');
+
+  const showNotification = (message: string, emoji: string) => {
+    setToastMessage(message);
+    setToastEmoji(emoji);
+    setShowToast(true);
+
+    // 播放提示音（可选）
+    try {
+      const audio = new Audio('/notification.mp3');
+      audio.play().catch(() => {
+        // 如果没有音频文件或播放失败，静默处理
+      });
+    } catch (error) {
+      // 静默处理音频错误
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -27,11 +81,11 @@ export default function PomodoroModal({ task, onClose }: PomodoroModalProps) {
           clearInterval(interval);
           setIsRunning(false);
           if (mode === 'work') {
-            alert('🎉 番茄钟完成！休息一下吧！');
+            showNotification('🎉 番茄钟完成！休息一下吧！', '🎉');
             setMode('break');
             return 5 * 60;
           } else {
-            alert('✨ 休息结束！继续加油！');
+            showNotification('✨ 休息结束！继续加油！', '✨');
             setMode('work');
             return 25 * 60;
           }
@@ -127,6 +181,15 @@ export default function PomodoroModal({ task, onClose }: PomodoroModalProps) {
           </button>
         </div>
       </div>
+
+      {/* 右下角通知 */}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          emoji={toastEmoji}
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 }
