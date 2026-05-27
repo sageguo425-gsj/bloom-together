@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import type { Task } from '@/lib/types/task';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_TAG_LABELS, TASK_TAG_COLORS } from '@/lib/types/task';
 
@@ -26,6 +27,31 @@ export default function TaskCard({
   onSelect,
 }: TaskCardProps) {
   const [showActions, setShowActions] = useState(false);
+  const [projectName, setProjectName] = useState<string>('');
+  const supabase = createClient();
+
+  // 加载项目名称
+  useEffect(() => {
+    const loadProjectName = async () => {
+      if (task.project_id) {
+        try {
+          const { data, error } = await supabase
+            .from('projects')
+            .select('title')
+            .eq('id', task.project_id)
+            .single();
+
+          if (!error && data) {
+            setProjectName(data.title);
+          }
+        } catch (error) {
+          console.error('加载项目名称失败:', error);
+        }
+      }
+    };
+
+    loadProjectName();
+  }, [task.project_id, supabase]);
 
   const priorityColors = {
     high: 'border-l-rose-500 bg-gradient-to-r from-rose-50/50 to-pink-50/30',
@@ -64,26 +90,24 @@ export default function TaskCard({
 
   return (
     <div
-      className={`relative group bg-white/80 backdrop-blur-sm rounded-2xl border-l-4 ${priorityColors[task.priority]} border-t border-r border-b border-emerald-100/50 p-5 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 min-h-[180px] flex flex-col ${
+      className={`relative group bg-white/80 backdrop-blur-sm rounded-2xl border-l-4 ${priorityColors[task.priority]} border-t border-r border-b border-emerald-100/50 p-4 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 min-h-[120px] flex flex-col ${
         isSelected ? 'ring-2 ring-emerald-500 shadow-lg' : ''
       }`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3">
         {/* 完成状态复选框 */}
         <div className="flex-shrink-0">
           <input
             type="checkbox"
             checked={task.status === 'completed'}
             onChange={handleCheckboxChange}
-            className="w-6 h-6 rounded-lg border-2 border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer transition-all hover:border-emerald-500"
+            className="w-5 h-5 rounded-lg border-2 border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer transition-all hover:border-emerald-500"
           />
         </div>
 
         {/* 任务内容 */}
         <div className="flex-1 min-w-0">
-          {/* 标题和优先级 */}
+          {/* 标题和状态 */}
           <div className="flex items-start justify-between gap-3 mb-2">
             <h4
               className={`text-base font-medium text-gray-900 ${
@@ -92,20 +116,28 @@ export default function TaskCard({
             >
               {task.title}
             </h4>
-            <span
-              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}
-            >
-              {TASK_STATUS_LABELS[task.status]}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}
+              >
+                {TASK_STATUS_LABELS[task.status]}
+              </span>
+              {/* 设置图标 */}
+              <button
+                onClick={() => onEdit(task)}
+                className="flex-shrink-0 p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                title="编辑任务"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          {/* 描述 */}
-          {task.description && (
-            <p className="text-sm text-gray-600 mb-3 line-clamp-2">{task.description}</p>
-          )}
-
           {/* 时间信息 */}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 mb-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
             {task.start_time && task.end_time && (
               <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white/80 rounded-lg border border-gray-200">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,19 +163,19 @@ export default function TaskCard({
             }`}>
               {TASK_PRIORITY_LABELS[task.priority]}
             </span>
-            {task.project_id && (
+            {projectName && (
               <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-200">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
-                <span>项目</span>
+                <span>{projectName}</span>
               </span>
             )}
           </div>
 
           {/* 标签 */}
           {task.tags && task.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
+            <div className="flex flex-wrap gap-2 mt-2">
               {task.tags.map((tag) => (
                 <span
                   key={tag}
@@ -156,83 +188,8 @@ export default function TaskCard({
               ))}
             </div>
           )}
-
-          {/* 完成时间 */}
-          {task.completed_at && (
-            <p className="text-xs text-gray-400 mt-2">
-              完成于 {new Date(task.completed_at).toLocaleString('zh-CN')}
-            </p>
-          )}
         </div>
       </div>
-
-      {/* 快速操作按钮 */}
-      {showActions && task.status !== 'completed' && (
-        <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-emerald-200/50 p-1.5">
-          <button
-            onClick={() => onStartPomodoro(task)}
-            className="p-2 hover:bg-gradient-to-br hover:from-red-50 hover:to-orange-50 rounded-lg transition-all group/btn"
-            title="开始番茄钟"
-          >
-            <svg className="w-5 h-5 text-red-600 group-hover/btn:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" opacity="0.2"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-          </button>
-          <button
-            onClick={() => {
-              if (task.status === 'pending') {
-                onStatusChange(task.id, 'in_progress');
-              } else {
-                onStatusChange(task.id, 'pending');
-              }
-            }}
-            className="p-2 hover:bg-gradient-to-br hover:from-emerald-50 hover:to-teal-50 rounded-lg transition-all group/btn"
-            title={task.status === 'pending' ? '开始任务' : '暂停任务'}
-          >
-            {task.status === 'pending' ? (
-              <svg className="w-5 h-5 text-emerald-600 group-hover/btn:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 text-blue-600 group-hover/btn:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-              </svg>
-            )}
-          </button>
-          <button
-            onClick={() => onDuplicate(task)}
-            className="p-2 hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 rounded-lg transition-all group/btn"
-            title="复制任务"
-          >
-            <svg className="w-5 h-5 text-purple-600 group-hover/btn:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onEdit(task)}
-            className="p-2 hover:bg-gradient-to-br hover:from-amber-50 hover:to-yellow-50 rounded-lg transition-all group/btn"
-            title="编辑任务"
-          >
-            <svg className="w-5 h-5 text-amber-600 group-hover/btn:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => {
-              if (confirm('确定要删除这个任务吗？')) {
-                onDelete(task.id);
-              }
-            }}
-            className="p-2 hover:bg-gradient-to-br hover:from-red-50 hover:to-rose-50 rounded-lg transition-all group/btn"
-            title="删除任务"
-          >
-            <svg className="w-5 h-5 text-red-600 group-hover/btn:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
