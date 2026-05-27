@@ -7,13 +7,14 @@ import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { getUserProfile, type UserProfile } from '@/lib/services/userService'
 import { UserSettingsModal } from '@/components/UserSettingsModal'
-import { Settings, LogOut, User as UserIcon } from 'lucide-react'
+import { Settings, LogOut, User as UserIcon, Menu, X } from 'lucide-react'
 
 export function DashboardNav() {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
@@ -129,6 +130,18 @@ export function DashboardNav() {
             </div>
 
             <div className="flex items-center space-x-4">
+              {/* 移动端菜单按钮 */}
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                {showMobileMenu ? (
+                  <X className="w-6 h-6 text-white" />
+                ) : (
+                  <Menu className="w-6 h-6 text-white" />
+                )}
+              </button>
+
               {/* 用户信息下拉菜单 */}
               <div className="relative">
                 <button
@@ -215,6 +228,80 @@ export function DashboardNav() {
             </div>
           </div>
         </div>
+
+        {/* 移动端导航菜单 */}
+        {showMobileMenu && (
+          <div className="md:hidden border-t border-white/20">
+            <nav className="px-4 py-4 space-y-2">
+              <Link
+                href="/dashboard"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'home'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                首页
+              </Link>
+              <Link
+                href="/dashboard/tasks"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'tasks'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                任务
+              </Link>
+              <Link
+                href="/dashboard/pomodoro"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'pomodoro'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                番茄钟
+              </Link>
+              <Link
+                href="/dashboard/projects"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'projects'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                项目
+              </Link>
+              <Link
+                href="/dashboard/habits"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'habits'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                习惯
+              </Link>
+              <Link
+                href="/dashboard/partner"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'partner'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                伴侣空间
+              </Link>
+            </nav>
+          </div>
+        )}
       </header>
 
       {/* 用户设置弹窗 */}
