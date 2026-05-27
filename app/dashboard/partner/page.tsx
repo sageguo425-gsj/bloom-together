@@ -139,26 +139,26 @@ export default async function PartnerPage() {
     .order('created_at', { ascending: false })
 
   return (
-    <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12 space-y-6">
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 space-y-4 sm:space-y-6">
       {/* 伴侣信息卡片 - 磨砂玻璃效果 */}
-      <div className="backdrop-blur-xl bg-white/40 rounded-3xl shadow-2xl border border-white/50 p-8">
+      <div className="backdrop-blur-xl bg-white/40 rounded-2xl sm:rounded-3xl shadow-2xl border border-white/50 p-4 sm:p-6 lg:p-8">
         <PartnerHeader partner={partner} />
       </div>
 
       {/* 四个统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {/* 今日任务 */}
-        <div className="backdrop-blur-xl bg-white/60 rounded-2xl shadow-lg border border-white/60 p-6">
+        <div className="backdrop-blur-xl bg-white/60 rounded-xl sm:rounded-2xl shadow-lg border border-white/60 p-3 sm:p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-xs text-gray-500 font-light mb-1">今日任务</p>
-              <p className="text-3xl font-light text-gray-900">
+              <p className="text-2xl sm:text-3xl font-light text-gray-900">
                 {todayTasksCompleted}
-                <span className="text-lg text-gray-400">/{todayTasksTotal}</span>
+                <span className="text-base sm:text-lg text-gray-400">/{todayTasksTotal}</span>
               </p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-              <span className="text-2xl">📋</span>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+              <span className="text-xl sm:text-2xl">📋</span>
             </div>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
@@ -170,82 +170,82 @@ export default async function PartnerPage() {
         </div>
 
         {/* 专注时长 */}
-        <div className="backdrop-blur-xl bg-white/60 rounded-2xl shadow-lg border border-white/60 p-6">
+        <div className="backdrop-blur-xl bg-white/60 rounded-xl sm:rounded-2xl shadow-lg border border-white/60 p-3 sm:p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-xs text-gray-500 font-light mb-1">专注时长</p>
-              <p className="text-3xl font-light text-gray-900">
+              <p className="text-2xl sm:text-3xl font-light text-gray-900">
                 {todayFocusTime}
-                <span className="text-lg text-gray-400">分钟</span>
+                <span className="text-base sm:text-lg text-gray-400">分钟</span>
               </p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-100 to-orange-100 flex items-center justify-center">
-              <span className="text-2xl">🍅</span>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-red-100 to-orange-100 flex items-center justify-center">
+              <span className="text-xl sm:text-2xl">🍅</span>
             </div>
           </div>
           <p className="text-xs text-gray-500">今日专注</p>
         </div>
 
         {/* 习惯打卡 */}
-        <div className="backdrop-blur-xl bg-white/60 rounded-2xl shadow-lg border border-white/60 p-6">
+        <div className="backdrop-blur-xl bg-white/60 rounded-xl sm:rounded-2xl shadow-lg border border-white/60 p-3 sm:p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-xs text-gray-500 font-light mb-1">习惯打卡</p>
-              <p className="text-3xl font-light text-gray-900">
+              <p className="text-2xl sm:text-3xl font-light text-gray-900">
                 {habitsChecked}
-                <span className="text-lg text-gray-400">/{habitsTotal}</span>
+                <span className="text-base sm:text-lg text-gray-400">/{habitsTotal}</span>
               </p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center">
-              <span className="text-2xl">✅</span>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center">
+              <span className="text-xl sm:text-2xl">✅</span>
             </div>
           </div>
           <p className="text-xs text-gray-500">连续 0 天</p>
         </div>
 
         {/* 活跃项目 */}
-        <div className="backdrop-blur-xl bg-white/60 rounded-2xl shadow-lg border border-white/60 p-6">
+        <div className="backdrop-blur-xl bg-white/60 rounded-xl sm:rounded-2xl shadow-lg border border-white/60 p-3 sm:p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-xs text-gray-500 font-light mb-1">活跃项目</p>
-              <p className="text-3xl font-light text-gray-900">{activeProjects?.length || 0}</p>
+              <p className="text-2xl sm:text-3xl font-light text-gray-900">{activeProjects?.length || 0}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center">
-              <span className="text-2xl">🎯</span>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center">
+              <span className="text-xl sm:text-2xl">🎯</span>
             </div>
           </div>
           <p className="text-xs text-gray-500">进行中</p>
         </div>
       </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* 左侧：伴侣的规划 */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             {/* 任务列表 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-3xl shadow-xl border border-white/60 p-6">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
               <PartnerTasks allTasks={allTasks || []} completedTodayTasks={completedTodayTasks || []} />
             </div>
 
             {/* 习惯打卡 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-green-50/60 to-emerald-50/60 rounded-3xl shadow-xl border border-white/60 p-6">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-green-50/60 to-emerald-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
               <PartnerHabits habits={habits || []} />
             </div>
 
             {/* 项目进度 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-teal-50/60 to-cyan-50/60 rounded-3xl shadow-xl border border-white/60 p-6">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-teal-50/60 to-cyan-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
               <PartnerProjects projects={projects || []} />
             </div>
           </div>
 
           {/* 右侧：互动功能和连接状态 */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* 连接状态 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-white/50 rounded-3xl shadow-xl border border-white/60">
+            <div className="backdrop-blur-xl bg-white/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
               <ConnectionStatus />
             </div>
 
             {/* 留言板 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-pink-50/50 to-purple-50/50 rounded-3xl shadow-xl border border-white/60">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-pink-50/50 to-purple-50/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
               <MessageBoard />
             </div>
           </div>
