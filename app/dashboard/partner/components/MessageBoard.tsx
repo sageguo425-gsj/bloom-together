@@ -31,19 +31,28 @@ export function MessageBoard() {
 
   useEffect(() => {
     let mounted = true
+    let timeoutId: NodeJS.Timeout
 
     const init = async () => {
-      if (mounted) {
-        await loadMessages()
-        await markMessagesAsRead()
-        await loadUserInfo()
-      }
+      // 延迟初始化，避免与页面加载冲突
+      timeoutId = setTimeout(async () => {
+        if (mounted) {
+          await Promise.all([
+            loadMessages(),
+            markMessagesAsRead(),
+            loadUserInfo()
+          ])
+        }
+      }, 100)
     }
 
     init()
 
     return () => {
       mounted = false
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
   }, [])
 
@@ -59,7 +68,10 @@ export function MessageBoard() {
         setPartnerId(partner.id)
       }
     } catch (error) {
-      console.error('加载用户信息失败:', error)
+      // 静默处理错误，避免控制台警告
+      if (error instanceof Error && !error.message.includes('message channel closed')) {
+        console.error('加载用户信息失败:', error)
+      }
     }
   }
 
@@ -86,9 +98,14 @@ export function MessageBoard() {
   const loadMessages = async () => {
     try {
       const data = await getMessages()
-      setMessages(data)
+      if (data) {
+        setMessages(data)
+      }
     } catch (error) {
-      console.error('加载留言失败:', error)
+      // 静默处理错误，避免控制台警告
+      if (error instanceof Error && !error.message.includes('message channel closed')) {
+        console.error('加载留言失败:', error)
+      }
     }
   }
 
