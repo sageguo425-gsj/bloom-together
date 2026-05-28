@@ -100,7 +100,40 @@ export default function DashboardPage() {
         .order('start_time', { ascending: true });
 
       if (error) throw error;
-      setTodayTasks(data || []);
+
+      // 加载关联的项目和习惯信息
+      const tasksWithRelations = await Promise.all(
+        (data || []).map(async (task) => {
+          let projectName = null;
+          let habitName = null;
+
+          if (task.project_id) {
+            const { data: project } = await supabase
+              .from('projects')
+              .select('title')
+              .eq('id', task.project_id)
+              .single();
+            projectName = project?.title;
+          }
+
+          if (task.habit_id) {
+            const { data: habit } = await supabase
+              .from('habits')
+              .select('name')
+              .eq('id', task.habit_id)
+              .single();
+            habitName = habit?.name;
+          }
+
+          return {
+            ...task,
+            projectName,
+            habitName,
+          };
+        })
+      );
+
+      setTodayTasks(tasksWithRelations as any);
     } catch (error) {
       console.error('加载任务失败:', error);
     }
@@ -655,21 +688,56 @@ export default function DashboardPage() {
                         onChange={() => handleToggleTaskStatus(task.id, task.status)}
                         className="mt-1 w-5 h-5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
-                      <div className="flex-1">
-                        <h4 className={`text-sm font-medium mb-1 ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                      <div className="flex-1 space-y-2">
+                        <h4 className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                           {task.title}
                         </h4>
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
+
+                        {/* 第一行：时间和预计时长 */}
+                        <div className="flex items-center gap-2 flex-wrap text-xs">
                           {task.start_time && task.end_time && (
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1 text-gray-600">
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
                               <span>{task.start_time.slice(0, 5)} - {task.end_time.slice(0, 5)}</span>
                             </span>
                           )}
+                          {task.estimated_duration && (
+                            <span className="flex items-center gap-1 text-gray-600">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              <span>预计 {Math.floor(task.estimated_duration / 60)}h {task.estimated_duration % 60}m</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 第二行：项目/习惯、优先级、标签 */}
+                        <div className="flex items-center gap-2 flex-wrap text-xs">
+                          {(task as any).projectName && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                              📁 {(task as any).projectName}
+                            </span>
+                          )}
+                          {(task as any).habitName && (
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                              ✅ {(task as any).habitName}
+                            </span>
+                          )}
+                          {task.priority && (
+                            <span className={`px-2 py-0.5 rounded-full font-medium ${
+                              task.priority === 'high'
+                                ? 'bg-red-100 text-red-700'
+                                : task.priority === 'medium'
+                                ? 'bg-orange-100 text-orange-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {task.priority === 'high' ? '高优先级' : task.priority === 'medium' ? '中优先级' : '低优先级'}
+                            </span>
+                          )}
                           {task.tags && task.tags.length > 0 && (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
                               {task.tags[0] === 'study' ? '学习' : task.tags[0] === 'work' ? '工作' : task.tags[0] === 'life' ? '生活' : task.tags[0] === 'health' ? '健康' : '其他'}
                             </span>
                           )}

@@ -28,11 +28,12 @@ export default function TaskCard({
 }: TaskCardProps) {
   const [showActions, setShowActions] = useState(false);
   const [projectName, setProjectName] = useState<string>('');
+  const [habitName, setHabitName] = useState<string>('');
   const supabase = createClient();
 
-  // 加载项目名称
+  // 加载项目名称和习惯名称
   useEffect(() => {
-    const loadProjectName = async () => {
+    const loadRelations = async () => {
       if (task.project_id) {
         try {
           const { data, error } = await supabase
@@ -48,10 +49,26 @@ export default function TaskCard({
           console.error('加载项目名称失败:', error);
         }
       }
+
+      if (task.habit_id) {
+        try {
+          const { data, error } = await supabase
+            .from('habits')
+            .select('name')
+            .eq('id', task.habit_id)
+            .single();
+
+          if (!error && data) {
+            setHabitName(data.name);
+          }
+        } catch (error) {
+          console.error('加载习惯名称失败:', error);
+        }
+      }
     };
 
-    loadProjectName();
-  }, [task.project_id, supabase]);
+    loadRelations();
+  }, [task.project_id, task.habit_id, supabase]);
 
   const priorityColors = {
     high: 'border-l-rose-500 bg-gradient-to-r from-rose-50/50 to-pink-50/30',
@@ -174,11 +191,19 @@ export default function TaskCard({
               {TASK_PRIORITY_LABELS[task.priority]}
             </span>
             {projectName && (
-              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-200">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 font-medium">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
                 <span>{projectName}</span>
+              </span>
+            )}
+            {habitName && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 rounded-lg border border-green-200 font-medium">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{habitName}</span>
               </span>
             )}
           </div>
