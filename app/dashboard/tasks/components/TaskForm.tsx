@@ -77,13 +77,13 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
       // 加载习惯 - 只加载活跃的习惯
       const { data: habitsData } = await supabase
         .from('habits')
-        .select('id, title, icon')
+        .select('id, name, icon')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .order('title');
+        .order('name');
 
       setProjects(projectsData || []);
-      setHabits(habitsData?.map(h => ({ id: h.id, title: h.title, icon: h.icon })) || []);
+      setHabits(habitsData?.map(h => ({ id: h.id, title: h.name, icon: h.icon })) || []);
     } catch (error) {
       console.error('加载项目和习惯失败:', error);
     }
