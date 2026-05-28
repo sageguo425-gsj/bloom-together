@@ -87,7 +87,14 @@ export default function DashboardPage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [router, supabase, selectedDate, user]);
+  }, [router, supabase]);
+
+  // 监听 selectedDate 变化，重新加载任务
+  useEffect(() => {
+    if (user) {
+      loadTodayTasks(user.id, selectedDate);
+    }
+  }, [selectedDate, user]);
 
   const loadTodayTasks = async (userId: string, date?: string) => {
     try {
