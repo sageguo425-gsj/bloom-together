@@ -275,12 +275,16 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                 <label className="block text-xs text-gray-600 mb-2">关联习惯</label>
                 <select
                   value={formData.habit_id || ''}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    habit_id: e.target.value ? Number(e.target.value) : undefined,
-                    project_id: undefined // 清除项目选择
-                  })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    console.log('习惯选择变化:', value);
+                    setFormData({
+                      ...formData,
+                      habit_id: value ? Number(value) : undefined,
+                      project_id: undefined // 清除项目选择
+                    });
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all bg-white cursor-pointer"
                 >
                   <option value="">无关联习惯</option>
                   {habits.map((habit) => (
