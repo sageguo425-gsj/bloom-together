@@ -133,6 +133,7 @@ export default async function PartnerPage() {
     .from('habits')
     .select('*')
     .eq('user_id', partner.id)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
 
   // 获取伴侣的项目

@@ -178,6 +178,7 @@ export async function getPartnerHabits(): Promise<PartnerHabit[]> {
     .select('*')
     .eq('user_id', partner.id)
     .eq('is_shared', true)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
 
   if (!habits) return []
