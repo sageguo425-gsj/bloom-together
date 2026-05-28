@@ -21,7 +21,7 @@ export interface Task {
 
   // 关联
   project_id?: number;
-  habit_id?: number;
+  habit_id?: string; // UUID string
 
   // 伴侣空间
   is_shared?: boolean;
@@ -45,7 +45,7 @@ export interface TaskFormData {
   end_time?: string;
   estimated_duration?: number;
   project_id?: number;
-  habit_id?: number;
+  habit_id?: string; // UUID string
   is_shared?: boolean;
 }
 

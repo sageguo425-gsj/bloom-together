@@ -18,7 +18,7 @@ interface Project {
 }
 
 interface Habit {
-  id: number;
+  id: string; // UUID
   title: string;
   icon: string;
 }
@@ -276,20 +276,14 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                 <select
                   value={formData.habit_id || ''}
                   onChange={(e) => {
-                    e.stopPropagation();
                     const value = e.target.value;
-                    const habitId = value || undefined;
-                    console.log('习惯选择变化:', value, '转换后:', habitId);
-                    setFormData(prev => {
-                      console.log('更新前状态:', prev.habit_id, '更新后:', habitId);
-                      return {
-                        ...prev,
-                        habit_id: habitId as any,
-                        project_id: undefined // 清除项目选择
-                      };
+                    setFormData({
+                      ...formData,
+                      habit_id: value || undefined,
+                      project_id: undefined // 清除项目选择
                     });
                   }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all bg-white cursor-pointer"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                 >
                   <option value="">无关联习惯</option>
                   {habits.map((habit) => (
@@ -298,11 +292,6 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                     </option>
                   ))}
                 </select>
-                {formData.habit_id && (
-                  <p className="text-xs text-emerald-600 mt-1">
-                    已选择习惯 ID: {formData.habit_id}
-                  </p>
-                )}
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-2">
