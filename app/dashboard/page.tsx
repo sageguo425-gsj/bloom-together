@@ -716,84 +716,99 @@ export default function DashboardPage() {
                 {/* 时间刻度 */}
                 <div className="space-y-0">
                   {Array.from({ length: 17 }, (_, i) => i + 7).map((hour) => {
+                    // 为每一行收集任务段
+                    const rowTasks: Array<{
+                      task: Task;
+                      startBlock: number;
+                      endBlock: number;
+                    }> = [];
+
+                    todayTasks.forEach((task) => {
+                      if (!task.start_time || !task.end_time) return;
+
+                      const [startHour, startMin] = task.start_time.split(':').map(Number);
+                      const [endHour, endMin] = task.end_time.split(':').map(Number);
+
+                      // 如果任务在这一小时内
+                      if (startHour <= hour && endHour >= hour) {
+                        let startBlock = 0;
+                        let endBlock = 6;
+
+                        if (startHour === hour) {
+                          startBlock = Math.floor(startMin / 10);
+                        }
+                        if (endHour === hour) {
+                          endBlock = Math.ceil(endMin / 10);
+                        }
+
+                        if (startBlock < endBlock) {
+                          rowTasks.push({ task, startBlock, endBlock });
+                        }
+                      }
+                    });
+
                     return (
                       <div key={hour} className="relative">
                         {/* 小时标签 */}
-                        <div className="flex items-start gap-4 border-b-2 border-gray-300">
+                        <div className="flex items-start gap-4 border-b border-gray-200">
                           <div className="w-16 flex-shrink-0 text-sm font-medium text-gray-700 py-2">
                             {hour.toString().padStart(2, '0')}:00
                           </div>
                           <div className="flex-1"></div>
                         </div>
 
-                        {/* 6个10分钟时间块 */}
+                        {/* 时间块行 */}
                         <div className="flex items-start gap-4">
                           <div className="w-16 flex-shrink-0"></div>
-                          <div className="flex-1 grid grid-cols-6 gap-0">
-                            {Array.from({ length: 6 }, (_, blockIndex) => {
-                              const blockStartMinute = blockIndex * 10;
-                              const blockTime = hour * 60 + blockStartMinute;
+                          <div className="flex-1 relative" style={{ height: '48px' }}>
+                            {/* 背景网格 */}
+                            <div className="absolute inset-0 grid grid-cols-6">
+                              {Array.from({ length: 6 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className="border-r border-b border-gray-200 hover:bg-teal-50/30 transition-colors"
+                                />
+                              ))}
+                            </div>
 
-                              // 查找覆盖这个时间块的任务
-                              const blockTask = todayTasks.find((task) => {
-                                if (!task.start_time || !task.end_time) return false;
-
-                                const [startHour, startMin] = task.start_time.split(':').map(Number);
-                                const [endHour, endMin] = task.end_time.split(':').map(Number);
-
-                                const taskStartMinute = startHour * 60 + startMin;
-                                const taskEndMinute = endHour * 60 + endMin;
-
-                                // 检查这个时间块是否在任务时间范围内
-                                return blockTime >= taskStartMinute && blockTime < taskEndMinute;
-                              });
+                            {/* 任务块 */}
+                            {rowTasks.map((item, idx) => {
+                              const widthPercent = ((item.endBlock - item.startBlock) / 6) * 100;
+                              const leftPercent = (item.startBlock / 6) * 100;
 
                               // 根据任务状态选择颜色
-                              let bgColor = 'bg-white hover:bg-teal-50';
-                              if (blockTask) {
-                                if (blockTask.status === 'completed') {
-                                  bgColor = 'bg-teal-400 hover:bg-teal-500';
-                                } else if (blockTask.status === 'in_progress') {
-                                  bgColor = 'bg-emerald-400 hover:bg-emerald-500';
-                                } else {
-                                  bgColor = 'bg-slate-300 hover:bg-slate-400';
-                                }
+                              let bgGradient = 'from-emerald-400/90 via-emerald-500/90 to-teal-500/90';
+                              let textColor = 'text-white';
+                              let shadowColor = 'shadow-emerald-500/30';
+
+                              if (item.task.status === 'completed') {
+                                bgGradient = 'from-teal-400/90 via-teal-500/90 to-cyan-500/90';
+                                shadowColor = 'shadow-teal-500/30';
+                              } else if (item.task.status === 'in_progress') {
+                                bgGradient = 'from-green-400/90 via-green-500/90 to-emerald-500/90';
+                                shadowColor = 'shadow-green-500/30';
+                              } else {
+                                bgGradient = 'from-gray-300/90 via-gray-400/90 to-gray-500/90';
+                                shadowColor = 'shadow-gray-500/30';
                               }
 
                               return (
                                 <div
-                                  key={blockIndex}
-                                  className={`h-12 border-r border-b border-gray-200 transition-colors cursor-pointer relative group ${bgColor}`}
-                                  title={blockTask && blockTask.start_time && blockTask.end_time ? `${blockTask.title} (${blockTask.start_time.slice(0, 5)} - ${blockTask.end_time.slice(0, 5)})` : `${hour}:${blockStartMinute.toString().padStart(2, '0')}`}
+                                  key={`${item.task.id}-${idx}`}
+                                  className={`absolute top-0 h-full rounded-lg bg-gradient-to-r ${bgGradient} backdrop-blur-sm border border-white/20 shadow-lg ${shadowColor} transition-all hover:scale-[1.02] hover:shadow-xl cursor-pointer group`}
+                                  style={{
+                                    left: `${leftPercent}%`,
+                                    width: `${widthPercent}%`,
+                                  }}
+                                  title={`${item.task.title} (${item.task.start_time?.slice(0, 5)} - ${item.task.end_time?.slice(0, 5)})`}
                                 >
-                                  {/* 任务名称显示 - 只在任务开始的第一个格子显示 */}
-                                  {blockTask && blockTask.start_time && (
-                                    (() => {
-                                      const [taskStartHour, taskStartMin] = blockTask.start_time.split(':').map(Number);
-                                      const taskStartBlock = Math.floor(taskStartMin / 10);
-                                      const isFirstBlock = hour === taskStartHour && blockIndex === taskStartBlock;
-
-                                      if (isFirstBlock) {
-                                        return (
-                                          <div className="absolute inset-0 flex items-center justify-start px-1 overflow-hidden">
-                                            <span className="text-[10px] text-white font-medium truncate">
-                                              {blockTask.title}
-                                            </span>
-                                          </div>
-                                        );
-                                      }
-                                      return null;
-                                    })()
-                                  )}
-
-                                  {/* 时间块提示 - 只在空闲时显示 */}
-                                  {!blockTask && (
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <span className="text-xs text-gray-500 font-light">
-                                        {hour}:{blockStartMinute.toString().padStart(2, '0')}
-                                      </span>
-                                    </div>
-                                  )}
+                                  <div className="absolute inset-0 flex items-center justify-center px-2">
+                                    <span className={`text-sm font-medium ${textColor} truncate drop-shadow-sm`}>
+                                      {item.task.title}
+                                    </span>
+                                  </div>
+                                  {/* 磨砂玻璃效果叠加层 */}
+                                  <div className="absolute inset-0 bg-white/10 rounded-lg"></div>
                                 </div>
                               );
                             })}
