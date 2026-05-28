@@ -86,10 +86,21 @@ export default function ProjectDetailPage() {
         .from('tasks')
         .select('*')
         .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
+        .order('date', { ascending: true }); // 先按日期升序排序
 
       if (error) throw error;
-      setTasks(data || []);
+
+      // 对任务进行排序：未完成的在前（按日期升序），已完成的在后
+      const sortedTasks = (data || []).sort((a, b) => {
+        // 如果一个完成一个未完成，未完成的排在前面
+        if (a.status === 'completed' && b.status !== 'completed') return 1;
+        if (a.status !== 'completed' && b.status === 'completed') return -1;
+
+        // 如果都是同样的完成状态，按日期升序排序
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+
+      setTasks(sortedTasks);
     } catch (error) {
       console.error('加载任务失败:', error);
     }
@@ -233,7 +244,12 @@ export default function ProjectDetailPage() {
           {/* 左栏：任务列表 */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-6 shadow-md">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-light text-gray-900">项目任务</h2>
+              <h2 className="text-xl font-light text-gray-900">
+                项目任务
+                <span className="ml-2 text-sm text-gray-600">
+                  ({tasks.filter(t => t.status === 'completed').length}/{tasks.length})
+                </span>
+              </h2>
               <button
                 onClick={() => setShowTaskModal(true)}
                 className="px-4 py-2.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all text-sm font-medium shadow-sm hover:shadow-md"
