@@ -261,16 +261,20 @@ export async function getPartnerProjects(): Promise<PartnerProject[]> {
   // 计算每个项目的进度
   const projectsWithProgress = await Promise.all(
     projects.map(async (project) => {
+      // 查询该项目下的所有任务（不限制 is_shared）
       const { count: totalTasks } = await supabase
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', project.id)
 
+      // 查询该项目下已完成的任务
       const { count: completedTasks } = await supabase
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', project.id)
         .eq('status', 'completed')
+
+      console.log(`项目 ${project.title} (ID: ${project.id}): 总任务=${totalTasks}, 已完成=${completedTasks}`)
 
       const progress = totalTasks ? Math.round((completedTasks || 0) / totalTasks * 100) : 0
 
