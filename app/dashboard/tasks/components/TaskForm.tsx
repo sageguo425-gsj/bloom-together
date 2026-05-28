@@ -276,12 +276,17 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                 <select
                   value={formData.habit_id || ''}
                   onChange={(e) => {
+                    e.stopPropagation();
                     const value = e.target.value;
-                    console.log('习惯选择变化:', value);
-                    setFormData({
-                      ...formData,
-                      habit_id: value ? Number(value) : undefined,
-                      project_id: undefined // 清除项目选择
+                    const habitId = value ? Number(value) : undefined;
+                    console.log('习惯选择变化:', value, '转换后:', habitId);
+                    setFormData(prev => {
+                      console.log('更新前状态:', prev.habit_id, '更新后:', habitId);
+                      return {
+                        ...prev,
+                        habit_id: habitId,
+                        project_id: undefined // 清除项目选择
+                      };
                     });
                   }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all bg-white cursor-pointer"
@@ -293,6 +298,11 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                     </option>
                   ))}
                 </select>
+                {formData.habit_id && (
+                  <p className="text-xs text-emerald-600 mt-1">
+                    已选择习惯 ID: {formData.habit_id}
+                  </p>
+                )}
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-2">
