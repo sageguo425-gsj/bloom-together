@@ -2,9 +2,7 @@
 
 import { useState } from 'react'
 import { PartnerTask, toggleLike } from '@/lib/services/partnerService'
-import { Heart, Clock, CheckCircle2, Circle, AlertCircle } from 'lucide-react'
-import { format } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
+import { Heart, Clock, CheckCircle2, Circle, AlertCircle, Folder } from 'lucide-react'
 
 interface PartnerTasksProps {
   allTasks: PartnerTask[]
@@ -68,7 +66,16 @@ export function PartnerTasks({ allTasks: initialAllTasks, completedTodayTasks: i
             </span>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-gray-500">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+            {task.project_title && (
+              <span
+                className="inline-flex min-w-0 max-w-[220px] items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700"
+                title={`项目：${task.project_title}`}
+              >
+                <Folder className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">项目：{task.project_title}</span>
+              </span>
+            )}
             {task.date && (
               <span className="flex items-center gap-1">
                 📅 {task.date}

@@ -11,6 +11,8 @@ export interface PartnerProfile {
 
 export interface PartnerTask {
   id: number
+  project_id?: number | null
+  project_title?: string | null
   title: string
   description?: string
   date: string
@@ -29,7 +31,7 @@ export interface PartnerHabit {
   description?: string
   icon: string
   color: string
-  frequency: any
+  frequency: unknown
   current_streak: number
   total_checkins: number
   checkins_this_month: number
@@ -211,7 +213,7 @@ export async function getPartnerHabits(): Promise<PartnerHabit[]> {
       if (recentCheckins && recentCheckins.length > 0) {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
-        let checkDate = new Date(today)
+        const checkDate = new Date(today)
 
         // 检查今天是否打卡
         const firstCheckinDate = new Date(recentCheckins[0].date)

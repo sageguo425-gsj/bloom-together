@@ -142,6 +142,20 @@ export default async function PartnerPage() {
     .eq('user_id', partner.id)
     .order('created_at', { ascending: false })
 
+  const projectTitleById = new Map(
+    (projects || []).map((project) => [project.id, project.title])
+  )
+
+  const addProjectTitleToTasks = (tasks: typeof allTasks) => (
+    (tasks || []).map((task) => ({
+      ...task,
+      project_title: task.project_id ? projectTitleById.get(task.project_id) || null : null,
+    }))
+  )
+
+  const allTasksWithProjectTitles = addProjectTitleToTasks(allTasks)
+  const completedTodayTasksWithProjectTitles = addProjectTitleToTasks(completedTodayTasks)
+
   const projectsWithProgress = await Promise.all(
     (projects || []).map(async (project) => {
       const [{ count: linkedTaskCount }, { count: completedTaskCount }] = await Promise.all([
@@ -260,7 +274,7 @@ export default async function PartnerPage() {
           <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             {/* 任务列表 - 磨砂玻璃 */}
             <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
-              <PartnerTasks allTasks={allTasks || []} completedTodayTasks={completedTodayTasks || []} />
+              <PartnerTasks allTasks={allTasksWithProjectTitles} completedTodayTasks={completedTodayTasksWithProjectTitles} />
             </div>
 
             {/* 习惯打卡 - 磨砂玻璃 */}
