@@ -61,7 +61,7 @@ export function PartnerProjects({ projects }: PartnerProjectsProps) {
                   />
                 </div>
                 <span className="text-sm font-medium text-gray-600 min-w-[60px] text-right">
-                  {project.completed_tasks}/{project.total_tasks}
+                  {project.completed_tasks || 0}/{project.total_tasks || 0}
                 </span>
               </div>
             </div>
