@@ -6,6 +6,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import type { Project, ProjectJournal, Task } from '@/lib/types/database';
+import { addExpForTaskCompletion } from '@/lib/services/expService';
 
 export default function ProjectDetailPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -385,7 +386,6 @@ function TaskItem({ task, onUpdate, onEdit }: { task: Task; onUpdate: () => void
       if (newStatus === 'completed') {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { addExpForTaskCompletion } = await import('@/lib/services/expService');
           const result = await addExpForTaskCompletion(user.id);
 
           if (result.success && result.leveledUp) {

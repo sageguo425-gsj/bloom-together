@@ -7,6 +7,7 @@ import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import type { Task } from '@/lib/types/task';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Label, LabelList } from 'recharts';
+import { addExpForTaskCompletion } from '@/lib/services/expService';
 
 interface HabitStats {
   totalHabits: number;
@@ -448,7 +449,6 @@ export default function DashboardPage() {
 
       // 如果任务被标记为完成，增加经验值
       if (newStatus === 'completed' && user) {
-        const { addExpForTaskCompletion } = await import('@/lib/services/expService');
         const result = await addExpForTaskCompletion(user.id);
 
         if (result.success && result.leveledUp) {

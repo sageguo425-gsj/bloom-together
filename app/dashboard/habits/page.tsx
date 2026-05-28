@@ -9,6 +9,7 @@ import type { Habit, HabitCheckin, HabitStats } from '@/lib/types/habit';
 import HabitCard from './components/HabitCard';
 import HabitForm from './components/HabitForm';
 import HabitCalendar from './components/HabitCalendar';
+import { addExpForHabitCheckin } from '@/lib/services/expService';
 
 export default function HabitsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -162,7 +163,6 @@ export default function HabitsPage() {
       if (checkinError) throw checkinError;
 
       // 打卡成功，增加经验值
-      const { addExpForHabitCheckin } = await import('@/lib/services/expService');
       const expResult = await addExpForHabitCheckin(user.id);
 
       if (expResult.success && expResult.leveledUp) {

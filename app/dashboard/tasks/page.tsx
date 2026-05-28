@@ -11,6 +11,7 @@ import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
 import PomodoroModal from './components/PomodoroModal';
 import BatchActions from './components/BatchActions';
+import { addExpForTaskCompletion } from '@/lib/services/expService';
 
 export default function TasksPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -128,7 +129,6 @@ export default function TasksPage() {
 
       // 如果任务被标记为完成，增加经验值
       if (status === 'completed' && user) {
-        const { addExpForTaskCompletion } = await import('@/lib/services/expService');
         const result = await addExpForTaskCompletion(user.id);
 
         if (result.success && result.leveledUp) {
