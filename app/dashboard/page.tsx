@@ -24,6 +24,13 @@ interface PomodoroStats {
   monthlyData: { week: string; minutes: number; dateRange: string }[]; // 本月数据（添加日期范围）
 }
 
+interface ProjectFocusData {
+  projectId: number;
+  projectTitle: string;
+  focusMinutes: number;
+  status: string;
+}
+
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +42,8 @@ export default function DashboardPage() {
     weeklyData: [],
     monthlyData: []
   });
+  const [projectFocusData, setProjectFocusData] = useState<ProjectFocusData[]>([]);
+  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [partnerInfo, setPartnerInfo] = useState<{ username: string; avatar?: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const router = useRouter();
@@ -57,7 +66,8 @@ export default function DashboardPage() {
         loadHabitStats(user.id),
         loadProjectStats(user.id),
         loadPartnerInfo(user.id),
-        loadPomodoroStats(user.id)
+        loadPomodoroStats(user.id),
+        loadProjectFocusData(user.id)
       ]);
 
       setLoading(false);
@@ -297,6 +307,78 @@ export default function DashboardPage() {
         weeklyData: [],
         monthlyData: []
       });
+    }
+  };
+
+  const loadProjectFocusData = async (userId: string) => {
+    try {
+      // 获取所有项目
+      const { data: projects, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, title, status')
+        .eq('user_id', userId)
+        .neq('status', 'archived')
+        .order('status', { ascending: true }); // active 在前，completed 在后
+
+      if (projectsError) {
+        console.error('获取项目列表失败:', projectsError);
+        setProjectFocusData([]);
+        return;
+      }
+
+      if (!projects || projects.length === 0) {
+        setProjectFocusData([]);
+        return;
+      }
+
+      // 为每个项目计算专注时长
+      const projectFocusPromises = projects.map(async (project) => {
+        // 获取该项目下的所有任务ID
+        const { data: tasks } = await supabase
+          .from('tasks')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('project_id', project.id);
+
+        if (!tasks || tasks.length === 0) {
+          return {
+            projectId: project.id,
+            projectTitle: project.title,
+            focusMinutes: 0,
+            status: project.status
+          };
+        }
+
+        const taskIds = tasks.map(t => t.id);
+
+        // 获取这些任务的所有完成的番茄钟会话
+        const { data: sessions } = await supabase
+          .from('pomodoro_sessions')
+          .select('duration')
+          .eq('user_id', userId)
+          .eq('completed', true)
+          .in('task_id', taskIds);
+
+        const totalSeconds = sessions?.reduce((sum, s) => sum + s.duration, 0) || 0;
+        const totalMinutes = Math.round(totalSeconds / 60);
+
+        return {
+          projectId: project.id,
+          projectTitle: project.title,
+          focusMinutes: totalMinutes,
+          status: project.status
+        };
+      });
+
+      const projectFocusResults = await Promise.all(projectFocusPromises);
+
+      // 按专注时长降序排序
+      projectFocusResults.sort((a, b) => b.focusMinutes - a.focusMinutes);
+
+      setProjectFocusData(projectFocusResults);
+    } catch (error) {
+      console.error('加载项目专注时长失败:', error);
+      setProjectFocusData([]);
     }
   };
 
@@ -745,7 +827,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 专注时长统计图表 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* 本周专注时长 - 折线图 */}
           <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md">
             <h3 className="text-xl font-light text-gray-900 mb-6">本周专注时长</h3>
@@ -831,6 +913,72 @@ export default function DashboardPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        {/* 项目专注时长 - 横向条形图 */}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-3xl border border-green-300 p-6 shadow-md">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-light text-gray-900">项目专注时长</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showCompletedProjects}
+                onChange={(e) => setShowCompletedProjects(e.target.checked)}
+                className="w-4 h-4 rounded border-green-300 text-green-600 focus:ring-green-500"
+              />
+              <span className="text-sm text-gray-600">显示已完成项目</span>
+            </label>
+          </div>
+
+          {projectFocusData.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 rounded-2xl bg-white/80 flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <span className="text-3xl">📊</span>
+              </div>
+              <p className="text-gray-500 text-sm font-light mb-4">暂无项目数据</p>
+              <Link
+                href="/dashboard/projects"
+                className="inline-block px-5 py-2.5 bg-green-500 text-white rounded-full text-sm font-medium hover:bg-green-600 transition-all shadow-sm"
+              >
+                + 创建项目
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {projectFocusData
+                .filter(project => showCompletedProjects || project.status !== 'completed')
+                .map((project, index) => {
+                  const maxMinutes = Math.max(...projectFocusData.map(p => p.focusMinutes), 1);
+                  const widthPercent = (project.focusMinutes / maxMinutes) * 100;
+                  const isCompleted = project.status === 'completed';
+
+                  return (
+                    <div key={project.projectId} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className={`font-medium ${isCompleted ? 'text-gray-500' : 'text-gray-900'}`}>
+                          {project.projectTitle}
+                          {isCompleted && <span className="ml-2 text-xs text-gray-400">(已完成)</span>}
+                        </span>
+                      </div>
+                      <div className="relative h-10 bg-white/60 rounded-xl overflow-hidden">
+                        <div
+                          className={`h-full rounded-xl transition-all duration-500 ${
+                            isCompleted
+                              ? 'bg-gradient-to-r from-gray-300 to-gray-400'
+                              : 'bg-gradient-to-r from-green-400 to-emerald-500'
+                          }`}
+                          style={{ width: `${widthPercent}%` }}
+                        >
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white font-semibold text-sm">
+                            {project.focusMinutes} 分钟
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       </main>
     </div>
