@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -8,6 +8,7 @@ import type { User } from '@supabase/supabase-js'
 import { getUserProfile, type UserProfile } from '@/lib/services/userService'
 import { UserSettingsModal } from '@/components/UserSettingsModal'
 import { Settings, LogOut, User as UserIcon, Menu, X } from 'lucide-react'
+import { getLevelProgress, getLevelTitle } from '@/lib/utils/levelSystem'
 
 export function DashboardNav() {
   const [user, setUser] = useState<User | null>(null)
@@ -191,7 +192,7 @@ export function DashboardNav() {
                       onClick={() => setShowDropdown(false)}
                     />
 
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-20">
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-20">
                       {/* 用户信息 */}
                       <div className="px-4 py-3 border-b border-gray-100">
                         <p className="text-sm font-medium text-gray-900">
@@ -200,6 +201,39 @@ export function DashboardNav() {
                         <p className="text-xs text-gray-500 mt-1">
                           {user?.email}
                         </p>
+
+                        {/* 等级和经验 */}
+                        {profile && (
+                          <div className="mt-3 space-y-2">
+                            {/* 等级称号 */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-600">
+                                {getLevelTitle(profile.level || 1).emoji} {getLevelTitle(profile.level || 1).title}
+                              </span>
+                              <span className="text-sm font-semibold text-emerald-600">
+                                Lv.{profile.level || 1}
+                              </span>
+                            </div>
+
+                            {/* 经验条 */}
+                            {(() => {
+                              const progress = getLevelProgress(profile.exp || 0);
+                              return (
+                                <>
+                                  <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500"
+                                      style={{ width: `${progress.progress}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500 text-center">
+                                    {progress.expInCurrentLevel} / {progress.expNeededForNextLevel} EXP
+                                  </p>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
 
                       {/* 菜单项 */}

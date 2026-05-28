@@ -1,0 +1,73 @@
+import { createClient } from '@/lib/supabase/client';
+import { EXP_PER_ACTION, getLevelFromExp } from '@/lib/utils/levelSystem';
+
+/**
+ * 增加用户经验值
+ * @param userId 用户ID
+ * @param expAmount 经验值数量（默认10）
+ */
+export async function addUserExp(userId: string, expAmount: number = EXP_PER_ACTION) {
+  const supabase = createClient();
+
+  try {
+    // 获取当前用户信息
+    const { data: currentUser, error: fetchError } = await supabase
+      .from('users')
+      .select('exp, level')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError) {
+      console.error('获取用户信息失败:', fetchError);
+      return { success: false, error: fetchError };
+    }
+
+    const currentExp = currentUser?.exp || 0;
+    const newExp = currentExp + expAmount;
+    const newLevel = getLevelFromExp(newExp);
+    const oldLevel = currentUser?.level || 1;
+
+    // 更新用户经验和等级
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        exp: newExp,
+        level: newLevel,
+      })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('更新用户经验失败:', updateError);
+      return { success: false, error: updateError };
+    }
+
+    // 检查是否升级
+    const leveledUp = newLevel > oldLevel;
+
+    return {
+      success: true,
+      newExp,
+      newLevel,
+      oldLevel,
+      leveledUp,
+      expGained: expAmount,
+    };
+  } catch (error) {
+    console.error('增加经验失败:', error);
+    return { success: false, error };
+  }
+}
+
+/**
+ * 任务完成时增加经验
+ */
+export async function addExpForTaskCompletion(userId: string) {
+  return await addUserExp(userId, EXP_PER_ACTION);
+}
+
+/**
+ * 习惯打卡时增加经验
+ */
+export async function addExpForHabitCheckin(userId: string) {
+  return await addUserExp(userId, EXP_PER_ACTION);
+}

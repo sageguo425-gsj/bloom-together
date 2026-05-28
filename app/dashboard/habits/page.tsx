@@ -161,6 +161,15 @@ export default function HabitsPage() {
 
       if (checkinError) throw checkinError;
 
+      // 打卡成功，增加经验值
+      const { addExpForHabitCheckin } = await import('@/lib/services/expService');
+      const expResult = await addExpForHabitCheckin(user.id);
+
+      if (expResult.success && expResult.leveledUp) {
+        // 显示升级提示
+        alert(`🎉 恭喜升级到 Lv.${expResult.newLevel}！`);
+      }
+
       // 更新习惯统计
       const habit = habits.find((h) => h.id === habitId);
       if (habit) {

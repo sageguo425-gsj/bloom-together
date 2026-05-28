@@ -446,6 +446,17 @@ export default function DashboardPage() {
 
       if (error) throw error;
 
+      // 如果任务被标记为完成，增加经验值
+      if (newStatus === 'completed' && user) {
+        const { addExpForTaskCompletion } = await import('@/lib/services/expService');
+        const result = await addExpForTaskCompletion(user.id);
+
+        if (result.success && result.leveledUp) {
+          // 显示升级提示
+          alert(`🎉 恭喜升级到 Lv.${result.newLevel}！`);
+        }
+      }
+
       if (user) {
         await loadTodayTasks(user.id, selectedDate);
       }
