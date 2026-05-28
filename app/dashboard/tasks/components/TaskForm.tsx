@@ -278,13 +278,13 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                   onChange={(e) => {
                     e.stopPropagation();
                     const value = e.target.value;
-                    const habitId = value ? Number(value) : undefined;
+                    const habitId = value || undefined;
                     console.log('习惯选择变化:', value, '转换后:', habitId);
                     setFormData(prev => {
                       console.log('更新前状态:', prev.habit_id, '更新后:', habitId);
                       return {
                         ...prev,
-                        habit_id: habitId,
+                        habit_id: habitId as any,
                         project_id: undefined // 清除项目选择
                       };
                     });
