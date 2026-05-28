@@ -105,9 +105,11 @@ export default async function PartnerPage() {
     .from('pomodoro_sessions')
     .select('duration')
     .eq('user_id', partner.id)
+    .eq('mode', 'work')
     .eq('completed', true)
-    .gte('started_at', `${today}T00:00:00`)
-    .lte('started_at', `${today}T23:59:59`)
+    .not('ended_at', 'is', null)
+    .gte('ended_at', todayStart.toISOString())
+    .lte('ended_at', todayEnd.toISOString())
 
   const todayFocusTime = Math.round((pomodoroSessions?.reduce((sum, s) => sum + s.duration, 0) || 0) / 60)
 
