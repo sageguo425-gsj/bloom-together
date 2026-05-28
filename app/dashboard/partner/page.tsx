@@ -1,4 +1,3 @@
-import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { PartnerHeader } from './components/PartnerHeader'
 import { PartnerTasks } from './components/PartnerTasks'
@@ -143,6 +142,39 @@ export default async function PartnerPage() {
     .eq('user_id', partner.id)
     .order('created_at', { ascending: false })
 
+  const projectsWithProgress = await Promise.all(
+    (projects || []).map(async (project) => {
+      const [{ count: linkedTaskCount }, { count: completedTaskCount }] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', partner.id)
+          .eq('project_id', project.id),
+        supabase
+          .from('tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', partner.id)
+          .eq('project_id', project.id)
+          .eq('status', 'completed'),
+      ])
+
+      const configuredTotalTasks = project.total_tasks || 0
+      const actualTotalTasks = linkedTaskCount || 0
+      const totalTasks = Math.max(configuredTotalTasks, actualTotalTasks)
+      const completedTasks = completedTaskCount || 0
+      const progress = totalTasks > 0
+        ? Math.min(Math.round((completedTasks / totalTasks) * 100), 100)
+        : 0
+
+      return {
+        ...project,
+        progress,
+        completed_tasks: completedTasks,
+        total_tasks: totalTasks,
+      }
+    })
+  )
+
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 space-y-4 sm:space-y-6">
       {/* 伴侣信息卡片 - 磨砂玻璃效果 */}
@@ -238,7 +270,7 @@ export default async function PartnerPage() {
 
             {/* 项目进度 - 磨砂玻璃 */}
             <div className="backdrop-blur-xl bg-gradient-to-br from-teal-50/60 to-cyan-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
-              <PartnerProjects projects={projects || []} />
+              <PartnerProjects projects={projectsWithProgress} />
             </div>
           </div>
 
