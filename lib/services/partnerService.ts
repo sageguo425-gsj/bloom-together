@@ -121,6 +121,12 @@ export async function getPartnerTodayTasks(): Promise<PartnerTask[]> {
   if (!partner) return []
 
   const { data: { user } } = await supabase.auth.getUser()
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 
   const { data: tasks } = await supabase
     .from('tasks')
@@ -135,6 +141,7 @@ export async function getPartnerTodayTasks(): Promise<PartnerTask[]> {
       end_time
     `)
     .eq('user_id', partner.id)
+    .eq('date', today)
     .in('status', ['pending', 'in_progress'])
     .eq('is_shared', true)
     .order('date', { ascending: true })

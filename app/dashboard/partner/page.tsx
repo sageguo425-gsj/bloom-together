@@ -56,22 +56,29 @@ export default async function PartnerPage() {
     )
   }
 
-  // 获取伴侣所有尚未完成的任务
-  const { data: allTasks } = await supabase
+  // 获取伴侣当日任务（使用东八区日期，避免部署环境时区影响）
+  const now = new Date()
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+  const todayStart = new Date(`${today}T00:00:00.000+08:00`)
+  const todayEnd = new Date(`${today}T23:59:59.999+08:00`)
+
+  // 获取伴侣当日尚未完成的任务
+  const { data: todayIncompleteTasks } = await supabase
     .from('tasks')
     .select('*')
     .eq('user_id', partner.id)
+    .eq('date', today)
     .in('status', ['pending', 'in_progress'])
     .order('date', { ascending: true })
     .order('start_time', { ascending: true })
     .limit(50)
 
-  // 获取伴侣当日完成的任务（使用本地时区）
-  const now = new Date();
-  const today = now.toISOString().split('T')[0]; // 保留 today 变量供后续使用
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-
+  // 获取伴侣当日完成的任务
   const { data: completedTodayTasks } = await supabase
     .from('tasks')
     .select('*')
@@ -147,14 +154,14 @@ export default async function PartnerPage() {
     (projects || []).map((project) => [project.id, project.title])
   )
 
-  const addProjectTitleToTasks = (tasks: typeof allTasks) => (
+  const addProjectTitleToTasks = (tasks: typeof todayIncompleteTasks) => (
     (tasks || []).map((task) => ({
       ...task,
       project_title: task.project_id ? projectTitleById.get(task.project_id) || null : null,
     }))
   )
 
-  const allTasksWithProjectTitles = addProjectTitleToTasks(allTasks)
+  const todayIncompleteTasksWithProjectTitles = addProjectTitleToTasks(todayIncompleteTasks)
   const completedTodayTasksWithProjectTitles = addProjectTitleToTasks(completedTodayTasks)
 
   const projectsWithProgress = await Promise.all(
@@ -275,7 +282,7 @@ export default async function PartnerPage() {
           <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             {/* 任务列表 - 磨砂玻璃 */}
             <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
-              <PartnerTasks allTasks={allTasksWithProjectTitles} completedTodayTasks={completedTodayTasksWithProjectTitles} />
+              <PartnerTasks allTasks={todayIncompleteTasksWithProjectTitles} completedTodayTasks={completedTodayTasksWithProjectTitles} />
             </div>
 
             {/* 习惯打卡 - 磨砂玻璃 */}
