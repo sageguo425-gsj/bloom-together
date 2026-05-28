@@ -77,26 +77,6 @@ export function DashboardNav() {
                   首页
                 </Link>
                 <Link
-                  href="/dashboard/tasks"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
-                    currentPage === 'tasks'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  任务
-                </Link>
-                <Link
-                  href="/dashboard/pomodoro"
-                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
-                    currentPage === 'pomodoro'
-                      ? 'text-white bg-white/20'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  番茄钟
-                </Link>
-                <Link
                   href="/dashboard/projects"
                   className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
                     currentPage === 'projects'
@@ -107,6 +87,16 @@ export function DashboardNav() {
                   项目
                 </Link>
                 <Link
+                  href="/dashboard/tasks"
+                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                    currentPage === 'tasks'
+                      ? 'text-white bg-white/20'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  任务
+                </Link>
+                <Link
                   href="/dashboard/habits"
                   className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
                     currentPage === 'habits'
@@ -115,6 +105,16 @@ export function DashboardNav() {
                   }`}
                 >
                   习惯
+                </Link>
+                <Link
+                  href="/dashboard/pomodoro"
+                  className={`px-5 py-2.5 rounded-full font-medium text-sm transition-all ${
+                    currentPage === 'pomodoro'
+                      ? 'text-white bg-white/20'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  番茄钟
                 </Link>
                 <Link
                   href="/dashboard/partner"
@@ -246,28 +246,6 @@ export function DashboardNav() {
                 首页
               </Link>
               <Link
-                href="/dashboard/tasks"
-                onClick={() => setShowMobileMenu(false)}
-                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
-                  currentPage === 'tasks'
-                    ? 'text-white bg-white/20'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                任务
-              </Link>
-              <Link
-                href="/dashboard/pomodoro"
-                onClick={() => setShowMobileMenu(false)}
-                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
-                  currentPage === 'pomodoro'
-                    ? 'text-white bg-white/20'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                番茄钟
-              </Link>
-              <Link
                 href="/dashboard/projects"
                 onClick={() => setShowMobileMenu(false)}
                 className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
@@ -279,6 +257,17 @@ export function DashboardNav() {
                 项目
               </Link>
               <Link
+                href="/dashboard/tasks"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'tasks'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                任务
+              </Link>
+              <Link
                 href="/dashboard/habits"
                 onClick={() => setShowMobileMenu(false)}
                 className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
@@ -288,6 +277,17 @@ export function DashboardNav() {
                 }`}
               >
                 习惯
+              </Link>
+              <Link
+                href="/dashboard/pomodoro"
+                onClick={() => setShowMobileMenu(false)}
+                className={`block px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === 'pomodoro'
+                    ? 'text-white bg-white/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                番茄钟
               </Link>
               <Link
                 href="/dashboard/partner"
