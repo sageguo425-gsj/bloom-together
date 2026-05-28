@@ -380,6 +380,20 @@ function TaskItem({ task, onUpdate, onEdit }: { task: Task; onUpdate: () => void
         .eq('id', task.id);
 
       if (error) throw error;
+
+      // 如果任务被标记为完成，增加经验值
+      if (newStatus === 'completed') {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { addExpForTaskCompletion } = await import('@/lib/services/expService');
+          const result = await addExpForTaskCompletion(user.id);
+
+          if (result.success && result.leveledUp) {
+            alert(`🎉 恭喜升级到 Lv.${result.newLevel}！`);
+          }
+        }
+      }
+
       setIsCompleted(!isCompleted);
       onUpdate();
     } catch (error) {

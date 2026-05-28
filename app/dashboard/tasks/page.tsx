@@ -125,6 +125,17 @@ export default function TasksPage() {
         .single();
 
       if (error) throw error;
+
+      // 如果任务被标记为完成，增加经验值
+      if (status === 'completed' && user) {
+        const { addExpForTaskCompletion } = await import('@/lib/services/expService');
+        const result = await addExpForTaskCompletion(user.id);
+
+        if (result.success && result.leveledUp) {
+          alert(`🎉 恭喜升级到 Lv.${result.newLevel}！`);
+        }
+      }
+
       setTasks(tasks.map((t) => (t.id === taskId ? data : t)));
     } catch (error) {
       console.error('更新任务状态失败:', error);
