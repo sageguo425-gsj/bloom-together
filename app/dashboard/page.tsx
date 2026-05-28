@@ -630,9 +630,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
           {/* 今日任务列表 - 占2列，高度与每日日程一致 */}
           <div className="lg:col-span-2">
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md h-full flex flex-col">
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md flex flex-col" style={{ height: '656px' }}>
               {/* 头部 */}
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 flex-shrink-0">
                 <h3 className="text-xl font-light text-gray-900">今日任务</h3>
                 <div className="flex items-center gap-2">
                   <button
@@ -657,8 +657,8 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* 任务列表 - 使用 flex-1 填充剩余空间 */}
-              <div className="space-y-3 flex-1 overflow-y-auto">
+              {/* 任务列表 - 固定高度，可滚动 */}
+              <div className="space-y-3 flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-thin scrollbar-thumb-emerald-300 scrollbar-track-emerald-50">
                 {todayTasks.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="w-16 h-16 rounded-2xl bg-white/80 flex items-center justify-center mx-auto mb-4 shadow-sm">
@@ -752,9 +752,9 @@ export default function DashboardPage() {
 
           {/* 时间轴视图 - 占3列 */}
           <div className="lg:col-span-3">
-            <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-3xl border border-teal-300 p-6 shadow-md">
+            <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-3xl border border-teal-300 p-6 shadow-md flex flex-col" style={{ height: '656px' }}>
               {/* 头部 */}
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 flex-shrink-0">
                 <h3 className="text-xl font-light text-gray-900">每日日程</h3>
                 <div className="flex items-center gap-2">
                   <button
@@ -780,7 +780,7 @@ export default function DashboardPage() {
               </div>
 
               {/* 时间轴 */}
-              <div className="relative max-h-[500px] overflow-y-auto bg-white/60 rounded-2xl p-4">
+              <div className="relative flex-1 overflow-y-auto min-h-0 bg-white/60 rounded-2xl p-4 scrollbar-thin scrollbar-thumb-teal-300 scrollbar-track-teal-50">
                 {/* 时间刻度 */}
                 <div className="space-y-0">
                   {Array.from({ length: 17 }, (_, i) => i + 7).map((hour) => {
