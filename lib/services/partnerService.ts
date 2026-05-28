@@ -34,6 +34,7 @@ export interface PartnerHabit {
   total_checkins: number
   checkins_this_month: number
   created_at: string
+  checked_in_today: boolean
 }
 
 export interface PartnerProject {
@@ -206,10 +207,16 @@ export async function getPartnerHabits(): Promise<PartnerHabit[]> {
         .limit(100)
 
       let currentStreak = 0
+      let checkedInToday = false
       if (recentCheckins && recentCheckins.length > 0) {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         let checkDate = new Date(today)
+
+        // 检查今天是否打卡
+        const firstCheckinDate = new Date(recentCheckins[0].date)
+        firstCheckinDate.setHours(0, 0, 0, 0)
+        checkedInToday = firstCheckinDate.getTime() === today.getTime()
 
         for (const checkin of recentCheckins) {
           const checkinDate = new Date(checkin.date)
@@ -235,7 +242,8 @@ export async function getPartnerHabits(): Promise<PartnerHabit[]> {
         current_streak: currentStreak,
         total_checkins: totalCheckins || 0,
         checkins_this_month: monthCheckins || 0,
-        created_at: habit.created_at
+        created_at: habit.created_at,
+        checked_in_today: checkedInToday
       }
     })
   )

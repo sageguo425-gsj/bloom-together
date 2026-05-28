@@ -1,7 +1,7 @@
 'use client'
 
 import { PartnerHabit } from '@/lib/services/partnerService'
-import { Flame, Calendar, TrendingUp, Clock, Repeat } from 'lucide-react'
+import { CheckCircle2, Circle } from 'lucide-react'
 
 interface PartnerHabitsProps {
   habits: PartnerHabit[]
@@ -25,22 +25,6 @@ export function PartnerHabits({ habits }: PartnerHabitsProps) {
     return '每天'
   }
 
-  const getDuration = (createdAt: string) => {
-    const created = new Date(createdAt)
-    const now = new Date()
-    const diffInDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (diffInDays < 30) {
-      return `${diffInDays}天`
-    } else if (diffInDays < 365) {
-      const months = Math.floor(diffInDays / 30)
-      return `${months}个月`
-    } else {
-      const years = Math.floor(diffInDays / 365)
-      return `${years}年`
-    }
-  }
-
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6 text-emerald-900">习惯打卡</h2>
@@ -50,47 +34,43 @@ export function PartnerHabits({ habits }: PartnerHabitsProps) {
           <p className="text-emerald-700/70 text-lg">伴侣还没有习惯</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {habits.map(habit => (
             <div
               key={habit.id}
-              className="bg-white/60 backdrop-blur-sm border border-emerald-100/50 shadow-sm rounded-lg p-3 hover:border-emerald-200 hover:shadow-md transition-all"
+              className="bg-white/80 backdrop-blur-sm border border-emerald-100/50 shadow-sm rounded-2xl p-4 hover:border-emerald-200 hover:shadow-md transition-all"
             >
-              <div className="flex items-center gap-3">
-                {/* 图标 */}
-                <span className="text-2xl flex-shrink-0">{habit.icon}</span>
+              <div className="flex items-center gap-4">
+                {/* 简约图标 */}
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
+                  style={{ backgroundColor: `${habit.color}20` }}
+                >
+                  {habit.icon}
+                </div>
 
-                {/* 名称和详情 */}
+                {/* 习惯信息 */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 text-sm truncate mb-1">{habit.name || habit.title}</h3>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Repeat className="w-3 h-3" />
-                      {getFrequencyText(habit.frequency)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      已坚持 {getDuration(habit.created_at)}
-                    </span>
+                  <h3 className="font-semibold text-gray-900 text-base mb-1">{habit.name || habit.title}</h3>
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <span>{getFrequencyText(habit.frequency)}</span>
+                    <span>已坚持 {habit.current_streak} 天</span>
                   </div>
                 </div>
 
-                {/* 统计数据 */}
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  <div className="flex items-center gap-1">
-                    <Flame className="w-3.5 h-3.5 text-orange-600" />
-                    <span className="text-sm font-bold text-orange-600">{habit.current_streak}</span>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="text-sm font-bold text-blue-600">{habit.checkins_this_month}</span>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-sm font-bold text-green-600">{habit.total_checkins}</span>
-                  </div>
+                {/* 今日完成状态 */}
+                <div className="flex-shrink-0">
+                  {habit.checked_in_today ? (
+                    <div className="flex items-center gap-2 text-emerald-600">
+                      <CheckCircle2 className="w-6 h-6" />
+                      <span className="text-sm font-medium">已完成</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <Circle className="w-6 h-6" />
+                      <span className="text-sm font-medium">未完成</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
