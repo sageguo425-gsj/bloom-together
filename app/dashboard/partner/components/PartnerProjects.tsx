@@ -60,7 +60,9 @@ export function PartnerProjects({ projects }: PartnerProjectsProps) {
                     style={{ width: `${project.progress}%` }}
                   />
                 </div>
-                <span className="text-sm font-semibold text-emerald-600 min-w-[45px] text-right">{project.progress}%</span>
+                <span className="text-sm font-medium text-gray-600 min-w-[60px] text-right">
+                  {project.completed_tasks}/{project.total_tasks}
+                </span>
               </div>
             </div>
           ))}

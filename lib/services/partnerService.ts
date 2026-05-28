@@ -45,6 +45,8 @@ export interface PartnerProject {
   status: string
   priority: string
   progress: number
+  completed_tasks: number
+  total_tasks: number
 }
 
 export interface Message {
@@ -274,7 +276,9 @@ export async function getPartnerProjects(): Promise<PartnerProject[]> {
 
       return {
         ...project,
-        progress
+        progress,
+        completed_tasks: completedTasks || 0,
+        total_tasks: totalTasks || 0
       }
     })
   )
