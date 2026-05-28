@@ -270,19 +270,22 @@ export async function getPartnerProjects(): Promise<PartnerProject[]> {
   const projectsWithProgress = await Promise.all(
     projects.map(async (project) => {
       // 查询该项目下的所有任务（不限制 is_shared）
-      const { count: totalTasks } = await supabase
+      const { count: totalTasks, error: totalError } = await supabase
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', project.id)
 
       // 查询该项目下已完成的任务
-      const { count: completedTasks } = await supabase
+      const { count: completedTasks, error: completedError } = await supabase
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', project.id)
         .eq('status', 'completed')
 
-      console.log(`项目 ${project.title} (ID: ${project.id}): 总任务=${totalTasks}, 已完成=${completedTasks}`)
+      if (totalError) console.error('查询总任务数错误:', totalError)
+      if (completedError) console.error('查询已完成任务数错误:', completedError)
+
+      console.log(`项目 "${project.title}" (ID: ${project.id}): 总任务=${totalTasks}, 已完成=${completedTasks}`)
 
       const progress = totalTasks ? Math.round((completedTasks || 0) / totalTasks * 100) : 0
 
