@@ -60,3 +60,8 @@ export function getLevelTitle(level: number): { emoji: string; title: string } {
  * 每完成一个任务或打卡一次：+10 EXP
  */
 export const EXP_PER_ACTION = 10;
+
+/**
+ * 完成一个工作番茄钟：+5 EXP
+ */
+export const EXP_PER_POMODORO = 5;

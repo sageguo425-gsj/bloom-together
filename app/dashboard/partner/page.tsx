@@ -3,6 +3,7 @@ import { PartnerHeader } from './components/PartnerHeader'
 import { PartnerTasks } from './components/PartnerTasks'
 import { PartnerHabits } from './components/PartnerHabits'
 import { PartnerProjects } from './components/PartnerProjects'
+import { PartnerPet } from './components/PartnerPet'
 import { MessageBoard } from './components/MessageBoard'
 import { PartnerInvitation } from './components/PartnerInvitation'
 import { ConnectionStatus } from './components/ConnectionStatus'
@@ -54,6 +55,43 @@ export default async function PartnerPage() {
         <PartnerInvitation />
       </main>
     )
+  }
+
+  const { data: currentUserExpData } = await supabase
+    .from('users')
+    .select('exp, exp_spent')
+    .eq('id', user.id)
+    .single()
+
+  const userTotalExp = currentUserExpData?.exp || 0
+  const userSpentExp = currentUserExpData?.exp_spent || 0
+  const availableExp = Math.max(userTotalExp - userSpentExp, 0)
+
+  const [user1Id, user2Id] = [user.id, partner.id].sort()
+  const coupleKey = `${user1Id}:${user2Id}`
+
+  const { data: existingPet } = await supabase
+    .from('couple_pets')
+    .select('*')
+    .eq('couple_key', coupleKey)
+    .maybeSingle()
+
+  let couplePet = existingPet
+
+  if (!couplePet) {
+    const { data: createdPet } = await supabase
+      .from('couple_pets')
+      .insert({
+        couple_key: coupleKey,
+        user1_id: user1Id,
+        user2_id: user2Id,
+        name: '小雪球',
+        species: 'samoyed',
+      })
+      .select('*')
+      .single()
+
+    couplePet = createdPet
   }
 
   // 获取伴侣当日任务（使用东八区日期，避免部署环境时区影响）
@@ -298,15 +336,17 @@ export default async function PartnerPage() {
             </div>
           </div>
 
-          {/* 右侧：互动功能和连接状态 */}
-          <div className="space-y-4 sm:space-y-6">
+          {/* 右侧：宠物、互动功能和连接状态 */}
+          <div className="flex h-full flex-col gap-4 sm:gap-6">
+            <PartnerPet initialPet={couplePet || null} initialAvailableExp={availableExp} />
+
             {/* 连接状态 - 磨砂玻璃 */}
             <div className="backdrop-blur-xl bg-white/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
               <ConnectionStatus />
             </div>
 
             {/* 留言板 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-pink-50/50 to-purple-50/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
+            <div className="flex-1 backdrop-blur-xl bg-gradient-to-br from-pink-50/50 to-purple-50/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
               <MessageBoard />
             </div>
           </div>

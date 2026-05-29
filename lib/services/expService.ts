@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
-import { EXP_PER_ACTION, getLevelFromExp } from '@/lib/utils/levelSystem';
+import { EXP_PER_ACTION, EXP_PER_POMODORO, getLevelFromExp } from '@/lib/utils/levelSystem';
 
 /**
  * 增加用户经验值
@@ -70,4 +70,11 @@ export async function addExpForTaskCompletion(userId: string) {
  */
 export async function addExpForHabitCheckin(userId: string) {
   return await addUserExp(userId, EXP_PER_ACTION);
+}
+
+/**
+ * 工作番茄钟完成时增加经验
+ */
+export async function addExpForPomodoroCompletion(userId: string) {
+  return await addUserExp(userId, EXP_PER_POMODORO);
 }

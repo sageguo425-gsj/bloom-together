@@ -8,6 +8,7 @@ export interface UserProfile {
   birthday?: string
   level: number
   exp: number
+  exp_spent?: number
   partner_id?: string
 }
 

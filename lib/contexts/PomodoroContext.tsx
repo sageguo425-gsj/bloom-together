@@ -7,6 +7,7 @@ import { useWakeLock } from '@/lib/hooks/useWakeLock';
 import { useNotification } from '@/lib/hooks/useNotification';
 import { useMediaSession } from '@/lib/hooks/useMediaSession';
 import { pomodoroService } from '@/lib/services/pomodoroService';
+import { addExpForPomodoroCompletion } from '@/lib/services/expService';
 import { vibrateSuccess } from '@/lib/utils/vibration';
 import { playSuccessSound } from '@/lib/utils/audio';
 import type { PomodoroMode } from '@/lib/types/pomodoro';
@@ -41,25 +42,18 @@ const PomodoroContext = createContext<PomodoroContextType | undefined>(undefined
 export function PomodoroProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [workDuration, setWorkDurationState] = useState(25);
-  const [breakDuration, setBreakDurationState] = useState(5);
+  const [workDuration, setWorkDurationState] = useState(() => {
+    if (typeof window === 'undefined') return 25;
+    const savedWorkDuration = localStorage.getItem('pomodoro_work_duration');
+    return savedWorkDuration ? parseInt(savedWorkDuration) : 25;
+  });
+  const [breakDuration, setBreakDurationState] = useState(() => {
+    if (typeof window === 'undefined') return 5;
+    const savedBreakDuration = localStorage.getItem('pomodoro_break_duration');
+    return savedBreakDuration ? parseInt(savedBreakDuration) : 5;
+  });
   const [completedSessions, setCompletedSessions] = useState(0);
   const currentSessionIdRef = useRef<string | null>(null);
-
-  // 从 localStorage 加载设置
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedWorkDuration = localStorage.getItem('pomodoro_work_duration');
-      const savedBreakDuration = localStorage.getItem('pomodoro_break_duration');
-
-      if (savedWorkDuration) {
-        setWorkDurationState(parseInt(savedWorkDuration));
-      }
-      if (savedBreakDuration) {
-        setBreakDurationState(parseInt(savedBreakDuration));
-      }
-    }
-  }, []);
 
   // 保存设置到 localStorage
   const setWorkDuration = (duration: number) => {
@@ -174,6 +168,7 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
           currentSessionIdRef.current,
           new Date().toISOString()
         );
+        await addExpForPomodoroCompletion(userId);
         setCompletedSessions((prev) => prev + 1);
       } catch (error) {
         console.error('保存番茄钟记录失败:', error);
