@@ -87,7 +87,7 @@ export function getPetGrowthProgress(growth: number) {
   }
 
   const current = growth - stage.min
-  const needed = stage.next - stage.min
+  const needed = stage.next - stage.min - 1
   return {
     stage,
     progress: Math.min(Math.round((current / needed) * 100), 100),

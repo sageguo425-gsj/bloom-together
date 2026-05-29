@@ -317,39 +317,41 @@ export default async function PartnerPage() {
         </div>
       </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* 左侧：伴侣的规划 */}
-          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-            {/* 任务列表 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
-              <PartnerTasks allTasks={todayIncompleteTasksWithProjectTitles} completedTodayTasks={completedTodayTasksWithProjectTitles} />
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-stretch">
+        {/* 任务列表 - 磨砂玻璃 */}
+        <div className="lg:col-span-2 backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
+          <PartnerTasks allTasks={todayIncompleteTasksWithProjectTitles} completedTodayTasks={completedTodayTasksWithProjectTitles} />
+        </div>
 
-            {/* 习惯打卡 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-green-50/60 to-emerald-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
-              <PartnerHabits habits={habits || []} />
-            </div>
+        <PartnerPet initialPet={couplePet || null} initialAvailableExp={availableExp} />
+      </div>
 
-            {/* 项目进度 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-teal-50/60 to-cyan-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
-              <PartnerProjects projects={projectsWithProgress} />
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-stretch">
+        {/* 左侧：习惯与项目 */}
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+          {/* 习惯打卡 - 磨砂玻璃 */}
+          <div className="backdrop-blur-xl bg-gradient-to-br from-green-50/60 to-emerald-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
+            <PartnerHabits habits={habits || []} />
           </div>
 
-          {/* 右侧：宠物、互动功能和连接状态 */}
-          <div className="flex h-full flex-col gap-4 sm:gap-6">
-            <PartnerPet initialPet={couplePet || null} initialAvailableExp={availableExp} />
-
-            {/* 连接状态 - 磨砂玻璃 */}
-            <div className="backdrop-blur-xl bg-white/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
-              <ConnectionStatus />
-            </div>
-
-            {/* 留言板 - 磨砂玻璃 */}
-            <div className="flex-1 backdrop-blur-xl bg-gradient-to-br from-pink-50/50 to-purple-50/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
-              <MessageBoard />
-            </div>
+          {/* 项目进度 - 磨砂玻璃 */}
+          <div className="backdrop-blur-xl bg-gradient-to-br from-teal-50/60 to-cyan-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6">
+            <PartnerProjects projects={projectsWithProgress} />
           </div>
+        </div>
+
+        {/* 右侧：互动功能和连接状态 */}
+        <div className="flex h-full flex-col gap-4 sm:gap-6">
+          {/* 连接状态 - 磨砂玻璃 */}
+          <div className="backdrop-blur-xl bg-white/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
+            <ConnectionStatus />
+          </div>
+
+          {/* 留言板 - 磨砂玻璃 */}
+          <div className="flex-1 backdrop-blur-xl bg-gradient-to-br from-pink-50/50 to-purple-50/50 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60">
+            <MessageBoard />
+          </div>
+        </div>
         </div>
       </main>
   )

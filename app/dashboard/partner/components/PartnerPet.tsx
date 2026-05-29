@@ -8,7 +8,6 @@ import {
   PetFoodType,
   feedCouplePet,
   getPetGrowthProgress,
-  getPetMoodText,
 } from '@/lib/services/petService'
 
 interface PartnerPetProps {
@@ -46,7 +45,7 @@ export function PartnerPet({ initialPet, initialAvailableExp }: PartnerPetProps)
   }
 
   return (
-    <div className="backdrop-blur-xl bg-gradient-to-br from-white/80 to-emerald-50/70 rounded-2xl sm:rounded-3xl shadow-xl border border-white/70 p-4 sm:p-6">
+    <div className="h-full backdrop-blur-xl bg-gradient-to-br from-emerald-50/60 to-teal-50/60 rounded-2xl sm:rounded-3xl shadow-xl border border-white/60 p-4 sm:p-6 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-2xl font-bold text-emerald-900">我们的萨摩耶</h2>
@@ -60,27 +59,27 @@ export function PartnerPet({ initialPet, initialAvailableExp }: PartnerPetProps)
         </div>
       </div>
 
-      <div className="rounded-2xl bg-gradient-to-b from-emerald-50 to-white border border-emerald-100/80 p-3 mb-4">
+      <div className="flex-1 flex min-h-0 items-end justify-center">
         <div
-          className="mx-auto h-44 max-w-[260px] rounded-xl bg-no-repeat"
+          className="h-44 w-full max-w-[300px] bg-no-repeat"
           style={{
-            backgroundImage: 'url(/pets/samoyed-stages.png)',
+            backgroundImage: 'url(/pets/samoyed-stages-transparent.png)',
             backgroundSize: '500% 100%',
             backgroundPosition: spritePosition,
           }}
           role="img"
           aria-label="白色萨摩耶宠物"
         />
-        <p className="text-center text-sm text-emerald-800 mt-2">
-          {pet ? getPetMoodText(pet) : '先在 Supabase 执行宠物系统迁移'}
-        </p>
       </div>
 
       {pet && growthInfo && (
-        <div className="space-y-3 mb-4">
-          <StatusBar label="成长" value={growthInfo.progress} detail={growthInfo.stage.next ? `${growthInfo.current}/${growthInfo.needed}` : '满级'} color="bg-emerald-500" />
-          <StatusBar label="饱腹" value={pet.hunger} detail={`${pet.hunger}/100`} color="bg-amber-400" />
-          <StatusBar label="快乐" value={pet.happiness} detail={`${pet.happiness}/100`} color="bg-pink-400" />
+        <div className="mt-3 mb-4">
+          <StatusBar
+            label="成长"
+            value={growthInfo.progress}
+            detail={growthInfo.stage.next ? `${growthInfo.current}/${growthInfo.needed}` : '满级'}
+            color="bg-emerald-500"
+          />
         </div>
       )}
 
@@ -94,20 +93,20 @@ export function PartnerPet({ initialPet, initialAvailableExp }: PartnerPetProps)
               onClick={() => handleFeed(food.type)}
               disabled={disabled}
               title={food.description}
-              className="rounded-xl border border-emerald-100 bg-white/80 px-2 py-3 text-center hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
+              className="rounded-xl px-2 py-2.5 text-center hover:bg-white/40 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
             >
-              <span className="block text-2xl mb-1">{food.icon}</span>
+              <span className="block text-3xl mb-1">{food.icon}</span>
               <span className="block text-sm font-semibold text-gray-900">{food.name}</span>
               <span className="block text-xs text-gray-500">{food.expCost} EXP</span>
-              <span className="mt-1 inline-flex items-center justify-center gap-0.5 text-[11px] text-emerald-700">
-                <Sparkles className="w-3 h-3" />+{food.growthGain}
+              <span className="mt-0.5 inline-flex items-center justify-center gap-0.5 text-xs text-emerald-700">
+                <Sparkles className="w-3 h-3" />成长 +{food.growthGain}
               </span>
             </button>
           )
         })}
       </div>
 
-      <div className="mt-3 min-h-5 text-xs text-emerald-700 flex items-center gap-1">
+      <div className="mt-2 min-h-5 text-xs text-emerald-700 flex items-center gap-1">
         {message && (
           <>
             <Utensils className="w-3.5 h-3.5" />
