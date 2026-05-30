@@ -48,7 +48,7 @@ export const PET_FOODS: PetFood[] = [
     growthGain: 8,
     hungerGain: 30,
     happinessGain: 5,
-    description: '主力成长食物，饱腹感很强',
+    description: '主力成长食物，双方每天共可喂 3 次',
   },
   {
     type: 'cake',
@@ -58,7 +58,7 @@ export const PET_FOODS: PetFood[] = [
     growthGain: 20,
     hungerGain: 15,
     happinessGain: 20,
-    description: '成长和快乐都很高，每人每天限喂一次',
+    description: '成长和快乐都很高，双方每天共可喂 2 次',
   },
 ]
 
@@ -87,7 +87,7 @@ export function getPetGrowthProgress(growth: number) {
   }
 
   const current = growth - stage.min
-  const needed = stage.next - stage.min - 1
+  const needed = stage.next - stage.min
   return {
     stage,
     progress: Math.min(Math.round((current / needed) * 100), 100),
@@ -134,7 +134,8 @@ export async function feedCouplePet(petId: string, foodType: PetFoodType) {
 
 function getFeedErrorMessage(message: string) {
   if (message.includes('insufficient_exp')) return '可用经验不够，先去完成一点任务吧'
-  if (message.includes('daily_cake_limit_reached')) return '小蛋糕每人每天只能喂一次'
+  if (message.includes('daily_beef_limit_reached')) return '牛肉今天已经喂满 3 次啦'
+  if (message.includes('daily_cake_limit_reached')) return '小蛋糕今天已经喂满 2 次啦'
   if (message.includes('not_pet_partner')) return '只有伴侣双方可以照顾这只小狗'
   if (message.includes('pet_not_found')) return '还没有找到你们的小狗'
   return '喂食失败，请稍后再试'

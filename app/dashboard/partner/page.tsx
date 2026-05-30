@@ -91,7 +91,17 @@ export default async function PartnerPage() {
       .select('*')
       .single()
 
-    couplePet = createdPet
+    if (createdPet) {
+      couplePet = createdPet
+    } else {
+      const { data: reloadedPet } = await supabase
+        .from('couple_pets')
+        .select('*')
+        .eq('couple_key', coupleKey)
+        .maybeSingle()
+
+      couplePet = reloadedPet
+    }
   }
 
   // 获取伴侣当日任务（使用东八区日期，避免部署环境时区影响）
@@ -323,7 +333,13 @@ export default async function PartnerPage() {
           <PartnerTasks allTasks={todayIncompleteTasksWithProjectTitles} completedTodayTasks={completedTodayTasksWithProjectTitles} />
         </div>
 
-        <PartnerPet initialPet={couplePet || null} initialAvailableExp={availableExp} />
+        <PartnerPet
+          initialPet={couplePet || null}
+          initialAvailableExp={availableExp}
+          coupleKey={coupleKey}
+          currentUserId={user.id}
+          partnerId={partner.id}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-stretch">

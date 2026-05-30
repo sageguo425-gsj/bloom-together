@@ -1,15 +1,97 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
-import type { Habit, HabitCheckin, HabitStats } from '@/lib/types/habit';
+import type { Habit, HabitFormData } from '@/lib/types/habit';
 import HabitCard from './components/HabitCard';
 import HabitForm from './components/HabitForm';
 import HabitCalendar from './components/HabitCalendar';
-import { addExpForHabitCheckin } from '@/lib/services/expService';
+import { addExpForHabitCheckin, removeExpForHabitCheckin } from '@/lib/services/expService';
+
+const MAKEUP_CHECKIN_LIMIT_PER_MONTH = 5;
+const MAKEUP_NOTE_PREFIX = '补打卡｜';
+
+type SupabaseErrorLike = {
+  message?: string;
+};
+
+type HabitCheckinDateRow = {
+  checkin_date: string;
+};
+
+function getShanghaiDate(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function getShanghaiMonthRange(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+
+  return {
+    startIso: new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00.000+08:00`).toISOString(),
+    endIso: new Date(`${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000+08:00`).toISOString(),
+  };
+}
+
+function addDays(dateStr: string, days: number) {
+  const date = new Date(`${dateStr}T00:00:00+08:00`);
+  date.setDate(date.getDate() + days);
+  return getShanghaiDate(date);
+}
+
+function calculateHabitStats(checkins: HabitCheckinDateRow[], today = getShanghaiDate()) {
+  const uniqueDates = Array.from(new Set(checkins.map((checkin) => checkin.checkin_date))).sort();
+  const totalCheckins = uniqueDates.length;
+  const lastCheckinDate = uniqueDates[uniqueDates.length - 1] || null;
+
+  let longestStreak = 0;
+  let runningStreak = 0;
+  let previousDate: string | null = null;
+
+  for (const date of uniqueDates) {
+    runningStreak = previousDate && addDays(previousDate, 1) === date ? runningStreak + 1 : 1;
+    longestStreak = Math.max(longestStreak, runningStreak);
+    previousDate = date;
+  }
+
+  let currentStreak = 0;
+  if (lastCheckinDate && (lastCheckinDate === today || lastCheckinDate === addDays(today, -1))) {
+    currentStreak = 1;
+    for (let index = uniqueDates.length - 2; index >= 0; index -= 1) {
+      if (addDays(uniqueDates[index], 1) !== uniqueDates[index + 1]) break;
+      currentStreak += 1;
+    }
+  }
+
+  return {
+    current_streak: currentStreak,
+    longest_streak: longestStreak,
+    total_checkins: totalCheckins,
+    last_checkin_date: lastCheckinDate,
+  };
+}
+
+function getErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error && 'message' in error) {
+    return (error as SupabaseErrorLike).message || '未知错误';
+  }
+
+  return '未知错误';
+}
 
 export default function HabitsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -19,24 +101,11 @@ export default function HabitsPage() {
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'calendar'>('cards');
+  const [monthlyMakeupUsed, setMonthlyMakeupUsed] = useState(0);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-      setUser(user);
-      loadHabits(user.id);
-    };
-
-    getUser();
-  }, [router, supabase]);
-
-  const loadHabits = async (userId: string) => {
+  const loadHabits = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('habits')
@@ -52,9 +121,77 @@ export default function HabitsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
-  const handleCreateHabit = async (formData: any) => {
+  const loadMonthlyMakeupUsage = useCallback(async (userId: string) => {
+    const { startIso, endIso } = getShanghaiMonthRange();
+
+    const { count, error } = await supabase
+      .from('habit_checkins')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .ilike('note', `${MAKEUP_NOTE_PREFIX}%`)
+      .gte('created_at', startIso)
+      .lt('created_at', endIso);
+
+    if (error) {
+      console.error('加载补打卡次数失败:', error);
+      return;
+    }
+
+    setMonthlyMakeupUsed(count || 0);
+  }, [supabase]);
+
+  const updateHabitState = useCallback((updatedHabit: Habit) => {
+    setHabits((currentHabits) => (
+      currentHabits.map((habit) => (habit.id === updatedHabit.id ? updatedHabit : habit))
+    ));
+    setSelectedHabit((currentHabit) => (
+      currentHabit?.id === updatedHabit.id ? updatedHabit : currentHabit
+    ));
+  }, []);
+
+  const recalculateHabitStats = useCallback(async (habitId: string) => {
+    const { data: checkins, error: checkinsError } = await supabase
+      .from('habit_checkins')
+      .select('checkin_date')
+      .eq('habit_id', habitId)
+      .order('checkin_date', { ascending: true });
+
+    if (checkinsError) throw checkinsError;
+
+    const stats = calculateHabitStats((checkins || []) as HabitCheckinDateRow[]);
+    const { data: updatedHabit, error: updateError } = await supabase
+      .from('habits')
+      .update(stats)
+      .eq('id', habitId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    updateHabitState(updatedHabit as Habit);
+    return updatedHabit as Habit;
+  }, [supabase, updateHabitState]);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+      setUser(user);
+      await Promise.all([
+        loadHabits(user.id),
+        loadMonthlyMakeupUsage(user.id),
+      ]);
+    };
+
+    getUser();
+  }, [loadHabits, loadMonthlyMakeupUsage, router, supabase]);
+
+  const handleCreateHabit = async (formData: HabitFormData) => {
     if (!user) return;
 
     try {
@@ -84,14 +221,14 @@ export default function HabitsPage() {
       console.log('Habit created successfully:', data);
       setHabits([data, ...habits]);
       setShowCreateModal(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('创建习惯失败:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
-      alert(`创建习惯失败：${error.message || '请检查数据库是否已正确设置'}`);
+      alert(`创建习惯失败：${getErrorMessage(error) || '请检查数据库是否已正确设置'}`);
     }
   };
 
-  const handleUpdateHabit = async (formData: any) => {
+  const handleUpdateHabit = async (formData: HabitFormData) => {
     if (!editingHabit) return;
 
     try {
@@ -128,90 +265,131 @@ export default function HabitsPage() {
     }
   };
 
-  const handleCheckin = async (habitId: string, note?: string) => {
-    if (!user) return;
+  const handleCheckin = async (
+    habitId: string,
+    note?: string,
+    checkinDate = getShanghaiDate(),
+    isMakeup = false
+  ) => {
+    if (!user) return false;
 
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toTimeString().split(' ')[0];
+    const today = getShanghaiDate();
+    const now = new Date().toLocaleTimeString('en-GB', {
+      hour12: false,
+      timeZone: 'Asia/Shanghai',
+    });
 
     try {
-      // 检查今天是否已经打卡
-      const { data: existingCheckin } = await supabase
-        .from('habit_checkins')
-        .select('*')
-        .eq('habit_id', habitId)
-        .eq('checkin_date', today)
-        .single();
+      if (isMakeup) {
+        if (checkinDate >= today) {
+          alert('补打卡只能选择今天之前的日期');
+          return false;
+        }
 
-      if (existingCheckin) {
-        alert('今天已经打卡过了！');
-        return;
+        if (monthlyMakeupUsed >= MAKEUP_CHECKIN_LIMIT_PER_MONTH) {
+          alert('本月补打卡次数已经用完啦');
+          return false;
+        }
       }
 
-      // 创建打卡记录
+      const { data: existingCheckin, error: existingError } = await supabase
+        .from('habit_checkins')
+        .select('id')
+        .eq('habit_id', habitId)
+        .eq('checkin_date', checkinDate)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      if (existingCheckin) {
+        alert(isMakeup ? '这一天已经打卡过了！' : '今天已经打卡过了！');
+        return false;
+      }
+
       const { error: checkinError } = await supabase
         .from('habit_checkins')
         .insert({
           habit_id: habitId,
           user_id: user.id,
-          checkin_date: today,
+          checkin_date: checkinDate,
           checkin_time: now,
-          note,
+          note: isMakeup ? `${MAKEUP_NOTE_PREFIX}${note?.trim() || '无备注'}` : note,
           auto_checkin: false,
         });
 
       if (checkinError) throw checkinError;
 
-      // 打卡成功，增加经验值
       const expResult = await addExpForHabitCheckin(user.id);
 
       if (expResult.success && expResult.leveledUp) {
-        // 显示升级提示
         alert(`🎉 恭喜升级到 Lv.${expResult.newLevel}！`);
       }
 
-      // 更新习惯统计
-      const habit = habits.find((h) => h.id === habitId);
-      if (habit) {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+      await recalculateHabitStats(habitId);
 
-        const isConsecutive = habit.last_checkin_date === yesterdayStr;
-        const newStreak = isConsecutive ? habit.current_streak + 1 : 1;
-
-        const { data: updatedHabit, error: updateError } = await supabase
-          .from('habits')
-          .update({
-            current_streak: newStreak,
-            longest_streak: Math.max(newStreak, habit.longest_streak),
-            total_checkins: habit.total_checkins + 1,
-            last_checkin_date: today,
-          })
-          .eq('id', habitId)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
-        setHabits(habits.map((h) => (h.id === habitId ? updatedHabit : h)));
+      if (isMakeup) {
+        await loadMonthlyMakeupUsage(user.id);
       }
 
-      // 显示成功动画
-      showCheckinSuccess();
+      showCheckinSuccess(isMakeup ? '补打卡成功！' : '打卡成功！');
+      return true;
     } catch (error) {
       console.error('打卡失败:', error);
       alert('打卡失败，请重试');
+      return false;
     }
   };
 
-  const showCheckinSuccess = () => {
-    // 简单的成功提示，可以后续增强为动画
+  const handleCancelCheckin = async (habitId: string, checkinDate: string) => {
+    if (!user) return false;
+
+    try {
+      const { data: existingCheckin, error: existingError } = await supabase
+        .from('habit_checkins')
+        .select('id, auto_checkin, note')
+        .eq('habit_id', habitId)
+        .eq('user_id', user.id)
+        .eq('checkin_date', checkinDate)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      if (!existingCheckin) {
+        alert('没有找到这一天的打卡记录');
+        return false;
+      }
+
+      const { error: deleteError } = await supabase
+        .from('habit_checkins')
+        .delete()
+        .eq('id', existingCheckin.id);
+
+      if (deleteError) throw deleteError;
+
+      if (!existingCheckin.auto_checkin) {
+        await removeExpForHabitCheckin(user.id);
+      }
+
+      await recalculateHabitStats(habitId);
+      if (existingCheckin.note?.startsWith(MAKEUP_NOTE_PREFIX)) {
+        await loadMonthlyMakeupUsage(user.id);
+      }
+      showCheckinSuccess('已取消打卡');
+      return true;
+    } catch (error) {
+      console.error('取消打卡失败:', error);
+      alert('取消打卡失败，请重试');
+      return false;
+    }
+  };
+
+  const showCheckinSuccess = (message: string) => {
     const successDiv = document.createElement('div');
     successDiv.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-3xl p-8 shadow-2xl z-50 animate-bounce';
     successDiv.innerHTML = `
       <div class="text-center">
         <div class="text-6xl mb-4">✅</div>
-        <p class="text-2xl font-light text-gray-900">打卡成功！</p>
+        <p class="text-2xl font-light text-gray-900">${message}</p>
       </div>
     `;
     document.body.appendChild(successDiv);
@@ -320,9 +498,12 @@ export default function HabitsPage() {
                 key={habit.id}
                 habit={habit}
                 onCheckin={handleCheckin}
+                onCancelCheckin={handleCancelCheckin}
                 onEdit={setEditingHabit}
                 onDelete={handleDeleteHabit}
                 onViewCalendar={setSelectedHabit}
+                makeupRemaining={Math.max(MAKEUP_CHECKIN_LIMIT_PER_MONTH - monthlyMakeupUsed, 0)}
+                makeupLimit={MAKEUP_CHECKIN_LIMIT_PER_MONTH}
               />
             ))}
           </div>
@@ -331,6 +512,7 @@ export default function HabitsPage() {
             habits={habits}
             selectedHabit={selectedHabit}
             onSelectHabit={setSelectedHabit}
+            onCancelCheckin={handleCancelCheckin}
           />
         )}
       </main>

@@ -1,88 +1,22 @@
--- Couple pet system: shared Samoyed growth powered by spendable user EXP.
+-- Shared couple pet feeding rules and realtime sync support.
+-- Beef and cake limits are shared by the couple per Shanghai calendar day.
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+GRANT SELECT, INSERT, UPDATE ON TABLE public.couple_pets TO authenticated;
+GRANT SELECT, INSERT ON TABLE public.pet_feed_logs TO authenticated;
 
-ALTER TABLE public.users
-ADD COLUMN IF NOT EXISTS exp_spent INTEGER NOT NULL DEFAULT 0;
-
-CREATE TABLE IF NOT EXISTS public.couple_pets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  couple_key TEXT NOT NULL UNIQUE,
-  user1_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  user2_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL DEFAULT '小雪球',
-  species TEXT NOT NULL DEFAULT 'samoyed',
-  growth INTEGER NOT NULL DEFAULT 0,
-  hunger INTEGER NOT NULL DEFAULT 70 CHECK (hunger >= 0 AND hunger <= 100),
-  happiness INTEGER NOT NULL DEFAULT 70 CHECK (happiness >= 0 AND happiness <= 100),
-  cleanliness INTEGER NOT NULL DEFAULT 80 CHECK (cleanliness >= 0 AND cleanliness <= 100),
-  last_fed_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  CHECK (user1_id <> user2_id)
-);
-
-CREATE TABLE IF NOT EXISTS public.pet_feed_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  pet_id UUID NOT NULL REFERENCES public.couple_pets(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  food_type TEXT NOT NULL CHECK (food_type IN ('bone', 'beef', 'cake')),
-  exp_cost INTEGER NOT NULL,
-  growth_gain INTEGER NOT NULL,
-  hunger_gain INTEGER NOT NULL,
-  happiness_gain INTEGER NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_couple_pets_user1_id ON public.couple_pets(user1_id);
-CREATE INDEX IF NOT EXISTS idx_couple_pets_user2_id ON public.couple_pets(user2_id);
-CREATE INDEX IF NOT EXISTS idx_pet_feed_logs_pet_id ON public.pet_feed_logs(pet_id);
-CREATE INDEX IF NOT EXISTS idx_pet_feed_logs_user_date ON public.pet_feed_logs(user_id, created_at);
-
-ALTER TABLE public.couple_pets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pet_feed_logs ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Partners can view their couple pet" ON public.couple_pets;
-CREATE POLICY "Partners can view their couple pet"
-  ON public.couple_pets FOR SELECT
-  USING (auth.uid() = user1_id OR auth.uid() = user2_id);
-
-DROP POLICY IF EXISTS "Partners can create their couple pet" ON public.couple_pets;
-CREATE POLICY "Partners can create their couple pet"
-  ON public.couple_pets FOR INSERT
-  WITH CHECK (
-    auth.uid() = user1_id OR
-    auth.uid() = user2_id
-  );
-
-DROP POLICY IF EXISTS "Partners can update their couple pet" ON public.couple_pets;
-CREATE POLICY "Partners can update their couple pet"
-  ON public.couple_pets FOR UPDATE
-  USING (auth.uid() = user1_id OR auth.uid() = user2_id)
-  WITH CHECK (auth.uid() = user1_id OR auth.uid() = user2_id);
-
-DROP POLICY IF EXISTS "Partners can view their pet feed logs" ON public.pet_feed_logs;
-CREATE POLICY "Partners can view their pet feed logs"
-  ON public.pet_feed_logs FOR SELECT
-  USING (
-    pet_id IN (
-      SELECT id
-      FROM public.couple_pets
-      WHERE auth.uid() = user1_id OR auth.uid() = user2_id
-    )
-  );
-
-DROP POLICY IF EXISTS "Partners can insert their pet feed logs" ON public.pet_feed_logs;
-CREATE POLICY "Partners can insert their pet feed logs"
-  ON public.pet_feed_logs FOR INSERT
-  WITH CHECK (
-    auth.uid() = user_id AND
-    pet_id IN (
-      SELECT id
-      FROM public.couple_pets
-      WHERE auth.uid() = user1_id OR auth.uid() = user2_id
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'couple_pets'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.couple_pets;
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.feed_couple_pet(
   p_pet_id UUID,

@@ -1,33 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import type { Habit, CalendarDay } from '@/lib/types/habit';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
+import type { Habit, CalendarDay, HabitCheckin } from '@/lib/types/habit';
 import { createClient } from '@/lib/supabase/client';
 
 interface HabitCalendarProps {
   habits: Habit[];
   selectedHabit: Habit | null;
   onSelectHabit: (habit: Habit | null) => void;
+  onCancelCheckin: (habitId: string, checkinDate: string) => Promise<boolean>;
+}
+
+const MAKEUP_NOTE_PREFIX = '补打卡｜';
+
+function getDisplayNote(note?: string | null) {
+  if (!note) return '';
+  return note.startsWith(MAKEUP_NOTE_PREFIX) ? note.slice(MAKEUP_NOTE_PREFIX.length) : note;
 }
 
 export default function HabitCalendar({
   habits,
   selectedHabit,
   onSelectHabit,
+  onCancelCheckin,
 }: HabitCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [dateDetails, setDateDetails] = useState<any>(null);
-  const supabase = createClient();
+  const [dateDetails, setDateDetails] = useState<HabitCheckin[] | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    if (selectedHabit) {
-      loadCalendarData();
-    }
-  }, [selectedHabit, currentMonth]);
-
-  const loadCalendarData = async () => {
+  const loadCalendarData = useCallback(async () => {
     if (!selectedHabit) return;
 
     try {
@@ -47,9 +51,9 @@ export default function HabitCalendar({
 
       // 构建日历数据
       const days: CalendarDay[] = [];
-      const checkinMap = new Map<string, any[]>();
+      const checkinMap = new Map<string, HabitCheckin[]>();
 
-      data?.forEach((checkin) => {
+      (data as HabitCheckin[] | null)?.forEach((checkin) => {
         const date = checkin.checkin_date;
         if (!checkinMap.has(date)) {
           checkinMap.set(date, []);
@@ -75,9 +79,9 @@ export default function HabitCalendar({
     } catch (error) {
       console.error('加载日历数据失败:', error);
     }
-  };
+  }, [currentMonth, selectedHabit, supabase]);
 
-  const handleDateClick = async (day: CalendarDay) => {
+  const handleDateClick = useCallback(async (day: CalendarDay) => {
     setSelectedDate(day.date);
 
     if (!selectedHabit || !day.hasCheckin) {
@@ -93,11 +97,33 @@ export default function HabitCalendar({
         .eq('checkin_date', day.date);
 
       if (error) throw error;
-      setDateDetails(data);
+      setDateDetails((data || []) as HabitCheckin[]);
     } catch (error) {
       console.error('加载日期详情失败:', error);
     }
+  }, [selectedHabit, supabase]);
+
+  const handleCancelDateCheckin = async (checkinDate: string) => {
+    if (!selectedHabit) return;
+    if (!confirm('确定要取消这一天的打卡吗？会扣回本次打卡获得的经验。')) return;
+
+    const success = await onCancelCheckin(selectedHabit.id, checkinDate);
+    if (!success) return;
+
+    await loadCalendarData();
+    setDateDetails(null);
+    setSelectedDate(null);
   };
+
+  useEffect(() => {
+    if (!selectedHabit) return;
+
+    const timeoutId = window.setTimeout(() => {
+      loadCalendarData();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadCalendarData, selectedHabit]);
 
   const previousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
@@ -270,20 +296,36 @@ export default function HabitCalendar({
                     })}
                   </h4>
                   <div className="space-y-2">
-                    {dateDetails.map((checkin: any) => (
+                    {dateDetails.map((checkin) => (
                       <div key={checkin.id} className="bg-white rounded-xl p-3">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-medium text-gray-900">
                             {checkin.checkin_time.slice(0, 5)}
                           </span>
-                          {checkin.auto_checkin && (
-                            <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                              自动打卡
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {checkin.note?.startsWith(MAKEUP_NOTE_PREFIX) && (
+                              <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
+                                补打卡
+                              </span>
+                            )}
+                            {checkin.auto_checkin && (
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                                自动打卡
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleCancelDateCheckin(checkin.checkin_date)}
+                              title="取消这次打卡"
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        {checkin.note && (
-                          <p className="text-sm text-gray-600 font-light">{checkin.note}</p>
+                        {getDisplayNote(checkin.note) && (
+                          <p className="text-sm text-gray-600 font-light">
+                            {getDisplayNote(checkin.note)}
+                          </p>
                         )}
                       </div>
                     ))}
