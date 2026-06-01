@@ -7,7 +7,6 @@ import type { User } from '@supabase/supabase-js';
 import type { Habit, HabitFormData } from '@/lib/types/habit';
 import HabitCard from './components/HabitCard';
 import HabitForm from './components/HabitForm';
-import HabitCalendar from './components/HabitCalendar';
 import { addExpForHabitCheckin, removeExpForHabitCheckin } from '@/lib/services/expService';
 
 const MAKEUP_CHECKIN_LIMIT_PER_MONTH = 5;
@@ -99,8 +98,6 @@ export default function HabitsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
-  const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
-  const [viewMode, setViewMode] = useState<'cards' | 'calendar'>('cards');
   const [monthlyMakeupUsed, setMonthlyMakeupUsed] = useState(0);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -145,9 +142,6 @@ export default function HabitsPage() {
   const updateHabitState = useCallback((updatedHabit: Habit) => {
     setHabits((currentHabits) => (
       currentHabits.map((habit) => (habit.id === updatedHabit.id ? updatedHabit : habit))
-    ));
-    setSelectedHabit((currentHabit) => (
-      currentHabit?.id === updatedHabit.id ? updatedHabit : currentHabit
     ));
   }, []);
 
@@ -331,7 +325,7 @@ export default function HabitsPage() {
         await loadMonthlyMakeupUsage(user.id);
       }
 
-      showCheckinSuccess(isMakeup ? '补打卡成功！' : '打卡成功！');
+      showCheckinSuccess(isMakeup ? '补打卡成功' : '打卡成功');
       return true;
     } catch (error) {
       console.error('打卡失败:', error);
@@ -385,11 +379,11 @@ export default function HabitsPage() {
 
   const showCheckinSuccess = (message: string) => {
     const successDiv = document.createElement('div');
-    successDiv.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-3xl p-8 shadow-2xl z-50 animate-bounce';
+    successDiv.className = 'fixed inset-0 z-50 flex items-center justify-center pointer-events-none';
     successDiv.innerHTML = `
-      <div class="text-center">
-        <div class="text-6xl mb-4">✅</div>
-        <p class="text-2xl font-light text-gray-900">${message}</p>
+      <div class="flex flex-col items-center gap-3 rounded-3xl bg-white/95 px-8 py-7 shadow-2xl border border-emerald-100">
+        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-4xl font-light text-white">✓</div>
+        <p class="text-lg font-medium text-gray-900">${message}</p>
       </div>
     `;
     document.body.appendChild(successDiv);
@@ -448,32 +442,6 @@ export default function HabitsPage() {
           </button>
         </div>
 
-        {/* 视图切换 */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full p-1">
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                viewMode === 'cards'
-                  ? 'bg-white/95 text-emerald-700'
-                  : 'text-white hover:bg-white/20'
-              }`}
-            >
-              📊 卡片视图
-            </button>
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                viewMode === 'calendar'
-                  ? 'bg-white/95 text-emerald-700'
-                  : 'text-white hover:bg-white/20'
-              }`}
-            >
-              📅 日历视图
-            </button>
-          </div>
-        </div>
-
         {/* 习惯列表 */}
         {habits.length === 0 ? (
           <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-white/50 p-16 text-center shadow-xl">
@@ -491,7 +459,7 @@ export default function HabitsPage() {
               创建习惯
             </button>
           </div>
-        ) : viewMode === 'cards' ? (
+        ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {habits.map((habit) => (
               <HabitCard
@@ -501,19 +469,11 @@ export default function HabitsPage() {
                 onCancelCheckin={handleCancelCheckin}
                 onEdit={setEditingHabit}
                 onDelete={handleDeleteHabit}
-                onViewCalendar={setSelectedHabit}
                 makeupRemaining={Math.max(MAKEUP_CHECKIN_LIMIT_PER_MONTH - monthlyMakeupUsed, 0)}
                 makeupLimit={MAKEUP_CHECKIN_LIMIT_PER_MONTH}
               />
             ))}
           </div>
-        ) : (
-          <HabitCalendar
-            habits={habits}
-            selectedHabit={selectedHabit}
-            onSelectHabit={setSelectedHabit}
-            onCancelCheckin={handleCancelCheckin}
-          />
         )}
       </main>
 

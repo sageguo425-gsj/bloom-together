@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Check, RotateCcw, Trash2, X, Pencil } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
 import type { Habit, Milestone } from '@/lib/types/habit';
 import { createClient } from '@/lib/supabase/client';
 
@@ -11,10 +11,21 @@ interface HabitCardProps {
   onCancelCheckin: (habitId: string, checkinDate: string) => Promise<boolean>;
   onEdit: (habit: Habit) => void;
   onDelete: (habitId: string) => void;
-  onViewCalendar: (habit: Habit) => void;
   makeupRemaining: number;
   makeupLimit: number;
 }
+
+type HabitCheckinSummary = {
+  id: string;
+  checkin_date: string;
+};
+
+type MonthDay = {
+  date: string;
+  dayNumber: number;
+};
+
+const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
 function getShanghaiDate(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -31,81 +42,121 @@ function addDays(dateStr: string, days: number) {
   return getShanghaiDate(date);
 }
 
+function getShanghaiDayOfWeek(dateStr: string) {
+  return new Date(`${dateStr}T12:00:00+08:00`).getUTCDay();
+}
+
+function getMonthStart(dateStr: string) {
+  return `${dateStr.slice(0, 7)}-01`;
+}
+
+function addMonths(monthStart: string, offset: number) {
+  const [year, month] = monthStart.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const nextYear = date.getUTCFullYear();
+  const nextMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `${nextYear}-${nextMonth}-01`;
+}
+
+function getMonthCalendar(monthDate: string) {
+  const [year, month] = monthDate.split('-').map(Number);
+  const monthText = String(month).padStart(2, '0');
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startDate = `${year}-${monthText}-01`;
+  const endDate = `${year}-${monthText}-${String(daysInMonth).padStart(2, '0')}`;
+  const leadingBlanks = (getShanghaiDayOfWeek(startDate) + 6) % 7;
+  const days = Array.from<unknown, MonthDay>({ length: daysInMonth }, (_, index) => {
+    const dayNumber = index + 1;
+    return {
+      date: `${year}-${monthText}-${String(dayNumber).padStart(2, '0')}`,
+      dayNumber,
+    };
+  });
+  const trailingBlanks = (7 - ((leadingBlanks + days.length) % 7)) % 7;
+
+  return {
+    days,
+    endDate,
+    label: `${year}年${month}月`,
+    leadingBlanks,
+    startDate,
+    trailingBlanks,
+  };
+}
+
+function formatDisplayDate(dateStr: string) {
+  const [, month, day] = dateStr.split('-').map(Number);
+  return `${month}月${day}日`;
+}
+
 export default function HabitCard({
   habit,
   onCheckin,
   onCancelCheckin,
   onEdit,
   onDelete,
-  onViewCalendar,
   makeupRemaining,
   makeupLimit,
 }: HabitCardProps) {
-  const [weeklyProgress, setWeeklyProgress] = useState<boolean[]>([false, false, false, false, false, false, false]);
-  const [canCheckinToday, setCanCheckinToday] = useState(true);
-  const [todayCheckinId, setTodayCheckinId] = useState<string | null>(null);
+  const today = getShanghaiDate();
+  const [visibleMonth, setVisibleMonth] = useState(() => getMonthStart(getShanghaiDate()));
+  const monthCalendar = useMemo(() => getMonthCalendar(visibleMonth), [visibleMonth]);
+  const [monthCheckins, setMonthCheckins] = useState<Record<string, string>>({});
+  const [selectedDate, setSelectedDate] = useState(today);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [showMakeupModal, setShowMakeupModal] = useState(false);
   const [checkinNote, setCheckinNote] = useState('');
   const [makeupNote, setMakeupNote] = useState('');
-  const [makeupDate, setMakeupDate] = useState(addDays(getShanghaiDate(), -1));
+  const [makeupDate, setMakeupDate] = useState(addDays(today, -1));
   const [submitting, setSubmitting] = useState(false);
   const supabase = useMemo(() => createClient(), []);
 
-  const loadWeeklyProgress = useCallback(async () => {
-    try {
-      const today = new Date();
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - today.getDay()); // 本周日
+  const selectedHasCheckin = Boolean(monthCheckins[selectedDate]);
+  const selectedIsToday = selectedDate === today;
+  const selectedIsPast = selectedDate < today;
+  const isViewingCurrentMonth = today >= monthCalendar.startDate && today <= monthCalendar.endDate;
 
-      const dates = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(weekStart);
-        date.setDate(weekStart.getDate() + i);
-        return date.toISOString().split('T')[0];
+  const loadMonthCheckins = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('habit_checkins')
+        .select('id, checkin_date')
+        .eq('habit_id', habit.id)
+        .gte('checkin_date', monthCalendar.startDate)
+        .lte('checkin_date', monthCalendar.endDate);
+
+      if (error) throw error;
+
+      const checkins: Record<string, string> = {};
+      (data as HabitCheckinSummary[] | null)?.forEach((checkin) => {
+        checkins[checkin.checkin_date] = checkin.id;
       });
-
-      const { data, error } = await supabase
-        .from('habit_checkins')
-        .select('checkin_date')
-        .eq('habit_id', habit.id)
-        .in('checkin_date', dates);
-
-      if (error) throw error;
-
-      const checkedDates = new Set(data?.map(c => c.checkin_date) || []);
-      const progress = dates.map(date => checkedDates.has(date));
-      setWeeklyProgress(progress);
+      setMonthCheckins(checkins);
     } catch (error) {
-      console.error('加载本周进度失败:', error);
+      console.error('加载本月打卡失败:', error);
     }
-  }, [habit.id, supabase]);
-
-  const checkTodayCheckin = useCallback(async () => {
-    try {
-      const today = getShanghaiDate();
-      const { data, error } = await supabase
-        .from('habit_checkins')
-        .select('id')
-        .eq('habit_id', habit.id)
-        .eq('checkin_date', today)
-        .maybeSingle();
-
-      if (error) throw error;
-      setTodayCheckinId(data?.id || null);
-      setCanCheckinToday(!data);
-    } catch (error) {
-      console.error('检查今日打卡失败:', error);
-      setTodayCheckinId(null);
-      setCanCheckinToday(true);
-    }
-  }, [habit.id, supabase]);
+  }, [habit.id, monthCalendar.endDate, monthCalendar.startDate, supabase]);
 
   const refreshCardState = useCallback(async () => {
-    await Promise.all([
-      loadWeeklyProgress(),
-      checkTodayCheckin(),
-    ]);
-  }, [checkTodayCheckin, loadWeeklyProgress]);
+    await loadMonthCheckins();
+  }, [loadMonthCheckins]);
+
+  const selectDefaultDateForMonth = useCallback((monthStart: string) => {
+    const calendar = getMonthCalendar(monthStart);
+    return today >= calendar.startDate && today <= calendar.endDate ? today : calendar.startDate;
+  }, [today]);
+
+  const changeVisibleMonth = (offset: number) => {
+    const nextMonth = addMonths(visibleMonth, offset);
+    setVisibleMonth(nextMonth);
+    setSelectedDate(selectDefaultDateForMonth(nextMonth));
+  };
+
+  const resetToCurrentMonth = () => {
+    const currentMonth = getMonthStart(today);
+    setVisibleMonth(currentMonth);
+    setSelectedDate(today);
+  };
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -116,66 +167,83 @@ export default function HabitCard({
   }, [habit.id, habit.last_checkin_date, habit.total_checkins, refreshCardState]);
 
   const handleCheckin = () => {
-    if (!canCheckinToday) {
-      alert('今天已经打卡过了，可以用取消打卡撤回');
-      return;
-    }
+    if (!selectedIsToday || selectedHasCheckin) return;
     setShowCheckinModal(true);
   };
 
   const confirmCheckin = async () => {
+    if (!selectedIsToday || selectedHasCheckin) return;
+
     setSubmitting(true);
-    const success = await onCheckin(habit.id, checkinNote);
-    if (success) {
-      setShowCheckinModal(false);
-      setCheckinNote('');
-      await refreshCardState();
+    try {
+      const success = await onCheckin(habit.id, checkinNote, selectedDate);
+      if (success) {
+        setShowCheckinModal(false);
+        setCheckinNote('');
+        await refreshCardState();
+      }
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
-  const handleCancelToday = async () => {
-    if (!todayCheckinId) {
-      alert('今天还没有打卡记录');
+  const handleCancelSelectedDate = async () => {
+    if (!selectedHasCheckin) return;
+
+    if (!confirm(`确定要取消 ${formatDisplayDate(selectedDate)} 的打卡吗？会扣回本次打卡获得的经验。`)) return;
+
+    setSubmitting(true);
+    try {
+      const success = await onCancelCheckin(habit.id, selectedDate);
+      if (success) {
+        await refreshCardState();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openMakeupModal = (date: string) => {
+    if (date >= today) return;
+
+    if (monthCheckins[date]) {
+      alert('这一天已经打卡过了');
       return;
     }
 
-    if (!confirm('确定要取消今天的打卡吗？会扣回本次打卡获得的经验。')) return;
-
-    setSubmitting(true);
-    const success = await onCancelCheckin(habit.id, getShanghaiDate());
-    if (success) {
-      await refreshCardState();
-    }
-    setSubmitting(false);
-  };
-
-  const openMakeupModal = () => {
     if (makeupRemaining <= 0) {
       alert('本月补打卡次数已经用完啦');
       return;
     }
 
-    setMakeupDate(addDays(getShanghaiDate(), -1));
+    setMakeupDate(date);
     setMakeupNote('');
     setShowMakeupModal(true);
   };
 
   const confirmMakeupCheckin = async () => {
-    const today = getShanghaiDate();
     if (!makeupDate || makeupDate >= today) {
       alert('补打卡只能选择今天之前的日期');
       return;
     }
 
-    setSubmitting(true);
-    const success = await onCheckin(habit.id, makeupNote, makeupDate, true);
-    if (success) {
-      setShowMakeupModal(false);
-      setMakeupNote('');
-      await refreshCardState();
+    if (monthCheckins[makeupDate]) {
+      alert('这一天已经打卡过了');
+      return;
     }
-    setSubmitting(false);
+
+    setSubmitting(true);
+    try {
+      const success = await onCheckin(habit.id, makeupNote, makeupDate, true);
+      if (success) {
+        setSelectedDate(makeupDate);
+        setShowMakeupModal(false);
+        setMakeupNote('');
+        await refreshCardState();
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const getMilestones = (): Milestone[] => {
@@ -195,7 +263,75 @@ export default function HabitCard({
     return '';
   };
 
-  const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+  const renderActionButtons = () => {
+    const statusButtonClass = 'h-12 inline-flex items-center justify-center gap-2 rounded-full font-medium text-sm transition-all';
+    const quietStatusClass = `${statusButtonClass} bg-emerald-50 text-emerald-700 border border-emerald-100 cursor-default`;
+    const secondaryButtonClass = 'w-24 h-12 inline-flex items-center justify-center gap-2 rounded-full bg-white border border-emerald-100 text-emerald-700 font-medium text-sm hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all';
+
+    if (selectedHasCheckin) {
+      return (
+        <div className="flex gap-3">
+          <button type="button" disabled className={`${quietStatusClass} flex-1`}>
+            <Check className="w-4 h-4" />
+            已打卡
+          </button>
+          <button
+            type="button"
+            onClick={handleCancelSelectedDate}
+            disabled={submitting}
+            className="w-24 h-12 inline-flex items-center justify-center gap-2 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-medium text-sm hover:bg-rose-100 disabled:opacity-50 disabled:cursor-wait transition-all"
+          >
+            <X className="w-4 h-4" />
+            取消
+          </button>
+        </div>
+      );
+    }
+
+    if (selectedIsPast) {
+      return (
+        <div className="space-y-2">
+          <div className="flex gap-3">
+            <button type="button" disabled className={`${quietStatusClass} flex-1`}>
+              未打卡
+            </button>
+            <button
+              type="button"
+              onClick={() => openMakeupModal(selectedDate)}
+              disabled={submitting || makeupRemaining <= 0}
+              className={secondaryButtonClass}
+            >
+              <RotateCcw className="w-4 h-4" />
+              补打卡
+            </button>
+          </div>
+          <p className="text-center text-xs text-emerald-700/80">
+            本月补打卡剩余 {makeupRemaining}/{makeupLimit}
+          </p>
+        </div>
+      );
+    }
+
+    if (selectedIsToday) {
+      return (
+        <button
+          type="button"
+          onClick={handleCheckin}
+          disabled={submitting}
+          className={`${statusButtonClass} w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:shadow-lg disabled:opacity-60 disabled:cursor-wait`}
+        >
+          <Check className="w-4 h-4" />
+          打卡
+        </button>
+      );
+    }
+
+    return (
+      <button type="button" disabled className={`${quietStatusClass} w-full`}>
+        未到日期
+      </button>
+    );
+  };
 
   return (
     <>
@@ -219,6 +355,7 @@ export default function HabitCard({
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => onEdit(habit)}
               title="编辑习惯"
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
@@ -226,6 +363,7 @@ export default function HabitCard({
               <Pencil className="w-5 h-5" />
             </button>
             <button
+              type="button"
               onClick={() => onDelete(habit.id)}
               title="删除习惯"
               className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -259,23 +397,83 @@ export default function HabitCard({
           </div>
         </div>
 
-        {/* 本周打卡情况 */}
+        {/* 月历 */}
         <div className="mb-4">
-          <p className="text-xs text-gray-500 font-light mb-2">本周打卡</p>
-          <div className="grid grid-cols-7 gap-2">
-            {weeklyProgress.map((checked, index) => (
-              <div key={index} className="text-center">
-                <p className="text-xs text-gray-400 mb-1">{weekDays[index]}</p>
-                <div
-                  className={`w-full aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
-                    checked
-                      ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-300'
-                  }`}
-                >
-                  {checked ? '✓' : '○'}
-                </div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500 font-light">打卡日历</p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => changeVisibleMonth(-1)}
+                title="上个月"
+                className="h-7 w-7 inline-flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={resetToCurrentMonth}
+                title="回到本月"
+                className={`min-w-20 h-7 px-2 rounded-full text-xs font-light transition-all ${
+                  isViewingCurrentMonth
+                    ? 'text-gray-500 cursor-default'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                }`}
+              >
+                {monthCalendar.label}
+              </button>
+              <button
+                type="button"
+                onClick={() => changeVisibleMonth(1)}
+                title="下个月"
+                className="h-7 w-7 inline-flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+            {weekDays.map((day) => (
+              <div key={day} className="h-5 text-center text-xs text-gray-400">
+                {day}
               </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {Array.from({ length: monthCalendar.leadingBlanks }).map((_, index) => (
+              <div key={`leading-${index}`} className="h-10" />
+            ))}
+
+            {monthCalendar.days.map((day) => {
+              const hasCheckin = Boolean(monthCheckins[day.date]);
+              const isSelected = day.date === selectedDate;
+              const isToday = day.date === today;
+              const isFuture = day.date > today;
+
+              return (
+                <button
+                  key={day.date}
+                  type="button"
+                  onClick={() => setSelectedDate(day.date)}
+                  title={`${formatDisplayDate(day.date)}${hasCheckin ? ' 已打卡' : ''}`}
+                  className={`relative flex h-10 min-w-0 flex-col items-center justify-center rounded-xl text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md'
+                      : hasCheckin
+                      ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      : isFuture
+                      ? 'bg-gray-50 text-gray-300 hover:bg-gray-100'
+                      : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                  } ${isToday && !isSelected ? 'ring-2 ring-emerald-400 ring-offset-1' : ''}`}
+                >
+                  <span>{day.dayNumber}</span>
+                  {hasCheckin && <Check className="mt-0.5 w-3 h-3" />}
+                </button>
+              );
+            })}
+
+            {Array.from({ length: monthCalendar.trailingBlanks }).map((_, index) => (
+              <div key={`trailing-${index}`} className="h-10" />
             ))}
           </div>
         </div>
@@ -302,45 +500,7 @@ export default function HabitCard({
         </div>
 
         {/* 操作按钮 */}
-        <div className="space-y-3">
-          <div className="flex gap-3">
-            {canCheckinToday ? (
-              <button
-                onClick={handleCheckin}
-                disabled={submitting}
-                className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium text-sm hover:shadow-lg hover:scale-105 disabled:opacity-60 disabled:cursor-wait transition-all"
-              >
-                <Check className="w-4 h-4" />
-                今日打卡
-              </button>
-            ) : (
-              <button
-                onClick={handleCancelToday}
-                disabled={submitting}
-                className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-medium text-sm hover:bg-rose-100 disabled:opacity-60 disabled:cursor-wait transition-all"
-              >
-                <X className="w-4 h-4" />
-                取消打卡
-              </button>
-            )}
-            <button
-              onClick={() => onViewCalendar(habit)}
-              title="查看日历"
-              className="px-5 py-3 bg-white border border-gray-200 text-gray-700 rounded-full font-medium text-sm hover:bg-gray-50 transition-all"
-            >
-              <CalendarDays className="w-4 h-4" />
-            </button>
-          </div>
-
-          <button
-            onClick={openMakeupModal}
-            disabled={submitting || makeupRemaining <= 0}
-            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full bg-white border border-emerald-100 text-emerald-700 font-medium text-sm hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <RotateCcw className="w-4 h-4" />
-            补打卡 剩余 {makeupRemaining}/{makeupLimit}
-          </button>
-        </div>
+        <div>{renderActionButtons()}</div>
       </div>
 
       {/* 打卡确认模态框 */}
@@ -361,7 +521,7 @@ export default function HabitCard({
               </label>
               <textarea
                 value={checkinNote}
-                onChange={(e) => setCheckinNote(e.target.value)}
+                onChange={(event) => setCheckinNote(event.target.value)}
                 rows={3}
                 className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition-all font-light resize-none"
                 placeholder="记录今天的感受..."
@@ -370,15 +530,17 @@ export default function HabitCard({
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowCheckinModal(false)}
                 className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-full font-medium hover:bg-gray-50 transition-all"
               >
                 取消
               </button>
               <button
+                type="button"
                 onClick={confirmCheckin}
                 disabled={submitting}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-medium hover:shadow-lg hover:scale-105 disabled:opacity-60 disabled:cursor-wait transition-all"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-medium hover:shadow-lg disabled:opacity-60 disabled:cursor-wait transition-all"
               >
                 {submitting ? '保存中...' : '确认打卡'}
               </button>
@@ -402,17 +564,9 @@ export default function HabitCard({
             </div>
 
             <div className="space-y-5 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  选择日期
-                </label>
-                <input
-                  type="date"
-                  value={makeupDate}
-                  max={addDays(getShanghaiDate(), -1)}
-                  onChange={(event) => setMakeupDate(event.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition-all font-light"
-                />
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                <p className="text-xs text-emerald-700/70 mb-1">补打日期</p>
+                <p className="text-base font-medium text-emerald-800">{formatDisplayDate(makeupDate)}</p>
               </div>
 
               <div>
@@ -431,15 +585,17 @@ export default function HabitCard({
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowMakeupModal(false)}
                 className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-full font-medium hover:bg-gray-50 transition-all"
               >
                 取消
               </button>
               <button
+                type="button"
                 onClick={confirmMakeupCheckin}
                 disabled={submitting}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-medium hover:shadow-lg hover:scale-105 disabled:opacity-60 disabled:cursor-wait transition-all"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-medium hover:shadow-lg disabled:opacity-60 disabled:cursor-wait transition-all"
               >
                 {submitting ? '保存中...' : '确认补打卡'}
               </button>
