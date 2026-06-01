@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { pomodoroService } from '@/lib/services/pomodoroService';
 import type { User } from '@supabase/supabase-js';
 import { format } from 'date-fns';
@@ -20,28 +20,35 @@ interface PomodoroSession {
 
 interface RecentSessionsProps {
   user: User;
+  refreshKey?: number;
 }
 
-export default function RecentSessions({ user }: RecentSessionsProps) {
+function getShanghaiDate(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+export default function RecentSessions({ user, refreshKey = 0 }: RecentSessionsProps) {
   const [sessions, setSessions] = useState<PomodoroSession[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSessions();
-  }, [user]);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
+      setLoading(true);
       const data = await pomodoroService.getRecentSessions(user.id, 10);
 
       // 只显示当日完成的番茄钟（排除中断的和前几天的）
-      const today = new Date().toISOString().split('T')[0];
+      const today = getShanghaiDate();
       const filteredSessions = data.filter(session => {
         // 必须是已完成的
         if (!session.completed) return false;
 
         // 必须是当日的
-        const sessionDate = new Date(session.started_at).toISOString().split('T')[0];
+        const sessionDate = getShanghaiDate(new Date(session.started_at));
         return sessionDate === today;
       });
 
@@ -51,7 +58,15 @@ export default function RecentSessions({ user }: RecentSessionsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user.id]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadSessions();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadSessions, refreshKey]);
 
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);

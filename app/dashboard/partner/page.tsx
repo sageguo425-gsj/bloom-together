@@ -7,6 +7,7 @@ import { PartnerPet } from './components/PartnerPet'
 import { MessageBoard } from './components/MessageBoard'
 import { PartnerInvitation } from './components/PartnerInvitation'
 import { ConnectionStatus } from './components/ConnectionStatus'
+import { formatFocusMinutes } from '@/lib/utils'
 
 // 禁用页面缓存
 export const dynamic = 'force-dynamic'
@@ -284,8 +285,7 @@ export default async function PartnerPage() {
             <div>
               <p className="text-xs text-gray-500 font-light mb-1">专注时长</p>
               <p className="text-2xl sm:text-3xl font-light text-gray-900">
-                {todayFocusTime}
-                <span className="text-base sm:text-lg text-gray-400">分钟</span>
+                {formatFocusMinutes(todayFocusTime)}
               </p>
             </div>
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-red-100 to-orange-100 flex items-center justify-center">

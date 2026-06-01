@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { usePomodoroTimer } from '@/lib/hooks/usePomodoroTimer';
 import { useWhiteNoise } from '@/lib/hooks/useWhiteNoise';
 import { useWakeLock } from '@/lib/hooks/useWakeLock';
@@ -28,6 +28,7 @@ interface PomodoroContextType {
   handleStart: () => Promise<void>;
   handlePause: () => Promise<void>;
   handleReset: () => Promise<void>;
+  refreshTodayCompletedSessions: () => Promise<void>;
 
   // 白噪音状态
   whiteNoise: ReturnType<typeof useWhiteNoise>;
@@ -70,34 +71,45 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshTodayCompletedSessions = useCallback(async () => {
+    if (!userId) return;
+
+    try {
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+      const todayStart = new Date(`${today}T00:00:00.000+08:00`).toISOString();
+      const todayEnd = new Date(`${today}T23:59:59.999+08:00`).toISOString();
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+
+      const { data, error } = await supabase
+        .from('pomodoro_sessions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('completed', true)
+        .gte('started_at', todayStart)
+        .lte('started_at', todayEnd);
+
+      if (!error && data) {
+        setCompletedSessions(data.length);
+      }
+    } catch (error) {
+      console.error('加载今日完成番茄钟数量失败:', error);
+    }
+  }, [userId]);
+
   // 加载今日完成的番茄钟数量
   useEffect(() => {
-    const loadTodayCompletedSessions = async () => {
-      if (!userId) return;
+    const timeoutId = window.setTimeout(() => {
+      refreshTodayCompletedSessions();
+    }, 0);
 
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const { createClient } = await import('@/lib/supabase/client');
-        const supabase = createClient();
-
-        const { data, error } = await supabase
-          .from('pomodoro_sessions')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('completed', true)
-          .gte('started_at', `${today}T00:00:00`)
-          .lte('started_at', `${today}T23:59:59`);
-
-        if (!error && data) {
-          setCompletedSessions(data.length);
-        }
-      } catch (error) {
-        console.error('加载今日完成番茄钟数量失败:', error);
-      }
-    };
-
-    loadTodayCompletedSessions();
-  }, [userId]);
+    return () => window.clearTimeout(timeoutId);
+  }, [refreshTodayCompletedSessions]);
 
   // Hooks
   const { isSupported: isWakeLockSupported, requestWakeLock, releaseWakeLock } = useWakeLock();
@@ -134,7 +146,7 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
   // 请求通知权限
   useEffect(() => {
     requestNotificationPermission();
-  }, []);
+  }, [requestNotificationPermission]);
 
   // 处理计时器每秒更新
   function handleTimerTick(timeLeft: number) {
@@ -194,7 +206,7 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
       try {
         const session = await pomodoroService.createSession({
           user_id: userId,
-          task_id: selectedTask?.id ? Number(selectedTask.id) : undefined,
+          task_id: selectedTask?.id,
           mode: pomodoroTimer.mode,
           duration: workDuration * 60,
         });
@@ -241,6 +253,7 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
     handleStart,
     handlePause,
     handleReset,
+    refreshTodayCompletedSessions,
     whiteNoise,
     userId,
     setUserId,

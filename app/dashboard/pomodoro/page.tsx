@@ -1,26 +1,54 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import type { Task } from '@/lib/types/task';
 import { usePomodoro } from '@/lib/contexts/PomodoroContext';
 import { playNotificationSound } from '@/lib/utils/audio';
+import { pomodoroService } from '@/lib/services/pomodoroService';
 import RecentSessions from './components/RecentSessions';
 import WhiteNoisePlayer from './components/WhiteNoisePlayer';
+
+function getShanghaiDate(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function getShanghaiTime(date = new Date()) {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
 
 export default function PomodoroPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [manualTasks, setManualTasks] = useState<Task[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDurationModal, setShowDurationModal] = useState(false);
   const [showTaskSelector, setShowTaskSelector] = useState(false);
+  const [showManualSessionModal, setShowManualSessionModal] = useState(false);
+  const [manualSessionDate, setManualSessionDate] = useState(getShanghaiDate());
+  const [manualStartTime, setManualStartTime] = useState(getShanghaiTime());
+  const [manualDuration, setManualDuration] = useState(25);
+  const [manualTaskId, setManualTaskId] = useState('');
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualError, setManualError] = useState('');
+  const [manualFeedback, setManualFeedback] = useState('');
+  const [recentSessionsRefreshKey, setRecentSessionsRefreshKey] = useState(0);
 
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   // 使用全局 Context
   const {
@@ -36,7 +64,46 @@ export default function PomodoroPage() {
     handlePause,
     handleReset,
     setUserId,
+    refreshTodayCompletedSessions,
   } = usePomodoro();
+
+  const loadTasks = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .neq('status', 'completed')
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: true });
+
+      if (error) throw error;
+      setTasks(data || []);
+    } catch (error) {
+      console.error('加载任务失败:', error);
+    }
+  }, [supabase]);
+
+  const loadManualTasks = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: true })
+        .limit(100);
+
+      if (error) throw error;
+      setManualTasks(data || []);
+    } catch (error) {
+      console.error('加载手动记录任务失败:', error);
+    }
+  }, [supabase]);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((current) => !current);
+  }, []);
 
   useEffect(() => {
     const getUser = async () => {
@@ -47,12 +114,15 @@ export default function PomodoroPage() {
       }
       setUser(user);
       setUserId(user.id);
-      await loadTasks(user.id);
+      await Promise.all([
+        loadTasks(user.id),
+        loadManualTasks(user.id),
+      ]);
       setLoading(false);
     };
 
     getUser();
-  }, [router, supabase]);
+  }, [loadManualTasks, loadTasks, router, setUserId, supabase]);
 
   useEffect(() => {
     // 键盘快捷键
@@ -74,24 +144,7 @@ export default function PomodoroPage() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [pomodoroTimer.status, isFullscreen]);
-
-  const loadTasks = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('user_id', userId)
-        .neq('status', 'completed')
-        .order('date', { ascending: false })
-        .order('start_time', { ascending: true });
-
-      if (error) throw error;
-      setTasks(data || []);
-    } catch (error) {
-      console.error('加载任务失败:', error);
-    }
-  };
+  }, [handlePause, handleStart, isFullscreen, pomodoroTimer.status, toggleFullscreen]);
 
   const handleStartWithSound = async () => {
     await handleStart();
@@ -104,8 +157,59 @@ export default function PomodoroPage() {
     setShowDurationModal(false);
   };
 
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
+  const openManualSessionModal = () => {
+    const defaultStart = new Date(Date.now() - workDuration * 60 * 1000);
+    setManualSessionDate(getShanghaiDate(defaultStart));
+    setManualStartTime(getShanghaiTime(defaultStart));
+    setManualDuration(workDuration);
+    setManualTaskId(selectedTask?.id || '');
+    setManualError('');
+    setShowManualSessionModal(true);
+  };
+
+  const handleManualSessionSubmit = async () => {
+    if (!user) return;
+
+    const durationMinutes = Math.round(Number(manualDuration));
+    if (!manualSessionDate || !manualStartTime || !durationMinutes || durationMinutes <= 0) {
+      setManualError('请填写有效的日期、时间和专注时长');
+      return;
+    }
+
+    const startedAtDate = new Date(`${manualSessionDate}T${manualStartTime}:00+08:00`);
+    if (Number.isNaN(startedAtDate.getTime())) {
+      setManualError('日期或时间格式不正确');
+      return;
+    }
+
+    const endedAtDate = new Date(startedAtDate.getTime() + durationMinutes * 60 * 1000);
+    if (endedAtDate.getTime() > Date.now()) {
+      setManualError('结束时间不能晚于当前时间');
+      return;
+    }
+
+    setManualError('');
+    setManualSubmitting(true);
+    try {
+      await pomodoroService.createManualCompletedSession({
+        userId: user.id,
+        taskId: manualTaskId || undefined,
+        durationSeconds: durationMinutes * 60,
+        startedAt: startedAtDate.toISOString(),
+        endedAt: endedAtDate.toISOString(),
+      });
+
+      setShowManualSessionModal(false);
+      setRecentSessionsRefreshKey((key) => key + 1);
+      await refreshTodayCompletedSessions();
+      setManualFeedback('番茄钟记录已添加');
+      window.setTimeout(() => setManualFeedback(''), 1800);
+    } catch (error) {
+      console.error('添加番茄钟记录失败:', error);
+      setManualError('添加番茄钟记录失败，请重试');
+    } finally {
+      setManualSubmitting(false);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -320,6 +424,12 @@ export default function PomodoroPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                     </svg>
                   </button>
+                  <button
+                    onClick={openManualSessionModal}
+                    className="px-5 sm:px-6 lg:px-8 py-3 sm:py-4 lg:py-5 bg-white/20 backdrop-blur-sm text-white rounded-full font-medium text-sm sm:text-base lg:text-lg hover:bg-white/30 transition-all"
+                  >
+                    手动记录
+                  </button>
                 </div>
               </div>
 
@@ -334,7 +444,7 @@ export default function PomodoroPage() {
 
           {/* 右侧：最近记录和白噪音 */}
           <div className="flex flex-col gap-6">
-            {user && <RecentSessions user={user} />}
+            {user && <RecentSessions user={user} refreshKey={recentSessionsRefreshKey} />}
             {user && <WhiteNoisePlayer user={user} />}
           </div>
         </div>
@@ -391,6 +501,109 @@ export default function PomodoroPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 手动记录模态框 */}
+      {showManualSessionModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8">
+            <h3 className="text-2xl font-light text-gray-900 mb-2">手动添加番茄钟记录</h3>
+            <p className="text-sm text-gray-500 font-light mb-6">
+              记录已经完成的专注时间，可选择关联任务。
+            </p>
+
+            {manualError && (
+              <div className="mb-5 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                {manualError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  日期
+                </label>
+                <input
+                  type="date"
+                  value={manualSessionDate}
+                  max={getShanghaiDate()}
+                  onChange={(event) => setManualSessionDate(event.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  开始时间
+                </label>
+                <input
+                  type="time"
+                  value={manualStartTime}
+                  onChange={(event) => setManualStartTime(event.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-5 mb-8">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  专注时长（分钟）
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="240"
+                  value={manualDuration}
+                  onChange={(event) => setManualDuration(Number(event.target.value))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  关联任务
+                </label>
+                <select
+                  value={manualTaskId}
+                  onChange={(event) => setManualTaskId(event.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all bg-white"
+                >
+                  <option value="">不关联任务</option>
+                  {manualTasks.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                      {task.date ? ` · ${task.date}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowManualSessionModal(false)}
+                disabled={manualSubmitting}
+                className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 disabled:opacity-60 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleManualSessionSubmit}
+                disabled={manualSubmitting}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-medium hover:shadow-lg disabled:opacity-60 disabled:cursor-wait transition-all"
+              >
+                {manualSubmitting ? '保存中...' : '保存记录'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {manualFeedback && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-medium text-white shadow-xl">
+          {manualFeedback}
         </div>
       )}
     </div>

@@ -3,9 +3,10 @@ import type { PomodoroMode } from '@/lib/types/pomodoro';
 
 export interface PomodoroSessionData {
   user_id: string;
-  task_id?: number;
+  task_id?: string | number;
   mode: PomodoroMode;
   duration: number;
+  completed?: boolean;
   started_at?: string;
   ended_at?: string;
   interrupted_at?: string;
@@ -46,9 +47,41 @@ class PomodoroService {
 
       console.log('Session created successfully:', session);
       return session;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('创建番茄钟会话失败:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
+      throw error;
+    }
+  }
+
+  async createManualCompletedSession(data: {
+    userId: string;
+    taskId?: string;
+    durationSeconds: number;
+    startedAt: string;
+    endedAt: string;
+  }) {
+    try {
+      const sessionData = {
+        user_id: data.userId,
+        task_id: data.taskId || undefined,
+        mode: 'work' as PomodoroMode,
+        duration: data.durationSeconds,
+        completed: true,
+        started_at: data.startedAt,
+        ended_at: data.endedAt,
+      };
+
+      const { data: session, error } = await this.supabase
+        .from('pomodoro_sessions')
+        .insert([sessionData])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return session;
+    } catch (error) {
+      console.error('手动创建番茄钟记录失败:', error);
       throw error;
     }
   }
@@ -157,7 +190,7 @@ class PomodoroService {
     }
   }
 
-  async getProjectSessions(projectId: number) {
+  async getProjectSessions() {
     try {
       // 由于 pomodoro_sessions 表没有 project_id 字段，
       // 我们需要通过 tasks 表来关联

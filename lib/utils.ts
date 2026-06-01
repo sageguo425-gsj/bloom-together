@@ -11,6 +11,22 @@ export function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
+export function formatFocusMinutes(minutes: number): string {
+  const safeMinutes = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(safeMinutes / 60)
+  const remainingMinutes = safeMinutes % 60
+
+  if (hours === 0) {
+    return `${safeMinutes}分钟`
+  }
+
+  if (remainingMinutes === 0) {
+    return `${hours}小时`
+  }
+
+  return `${hours}小时${remainingMinutes}分钟`
+}
+
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toLocaleDateString('zh-CN', {

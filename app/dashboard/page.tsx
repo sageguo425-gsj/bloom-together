@@ -8,6 +8,7 @@ import type { User } from '@supabase/supabase-js';
 import type { Task } from '@/lib/types/task';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Label, LabelList } from 'recharts';
 import { addExpForTaskCompletion } from '@/lib/services/expService';
+import { formatFocusMinutes } from '@/lib/utils';
 
 interface HabitStats {
   totalHabits: number;
@@ -603,8 +604,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-xs text-gray-500 font-light mb-1">专注时长</p>
                 <p className="text-3xl font-extralight text-gray-900">
-                  {pomodoroStats.todayFocusTime}
-                  <span className="text-lg text-gray-400">分钟</span>
+                  {formatFocusMinutes(pomodoroStats.todayFocusTime)}
                 </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center group-hover:scale-110 transition-transform">
