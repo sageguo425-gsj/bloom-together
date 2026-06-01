@@ -90,6 +90,7 @@ export default function PomodoroPage() {
         .from('tasks')
         .select('*')
         .eq('user_id', userId)
+        .neq('status', 'completed')
         .order('date', { ascending: false })
         .order('start_time', { ascending: true })
         .limit(100);
