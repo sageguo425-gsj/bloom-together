@@ -63,6 +63,11 @@ export default function ProjectsPage() {
     router.push('/login');
   };
 
+  const filteredProjects = projects.filter((project) => {
+    if (activeFilter === 'all') return project.status !== 'completed';
+    return project.status === activeFilter;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen relative flex items-center justify-center">
@@ -162,7 +167,7 @@ export default function ProjectsPage() {
         </div>
 
         {/* Projects Grid */}
-        {projects.length === 0 ? (
+        {filteredProjects.length === 0 ? (
           <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-white/50 p-16 text-center shadow-md">
             <div className="w-20 h-20 rounded-2xl bg-emerald-100 shadow-sm flex items-center justify-center mx-auto mb-6">
               <span className="text-4xl">📋</span>
@@ -178,18 +183,13 @@ export default function ProjectsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects
-              .filter(project => {
-                if (activeFilter === 'all') return true;
-                return project.status === activeFilter;
-              })
-              .map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  onEdit={setEditingProject}
-                />
-              ))}
+            {filteredProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onEdit={setEditingProject}
+              />
+            ))}
           </div>
         )}
       </main>

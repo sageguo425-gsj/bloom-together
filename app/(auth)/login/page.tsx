@@ -60,7 +60,7 @@ export default function LoginPage() {
           <h1 className="text-4xl md:text-5xl text-white font-extralight tracking-tight mb-3">
             Bloom Together
           </h1>
-          <p className="text-emerald-100/70 text-sm italic">"Grow together, bloom together"</p>
+          <p className="text-emerald-100/70 text-sm italic">&quot;Grow together, bloom together&quot;</p>
         </div>
 
         {/* 毛玻璃效果登录卡片 */}

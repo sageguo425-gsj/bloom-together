@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import type { Task } from '@/lib/types/task';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Label, LabelList } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import { addExpForTaskCompletion } from '@/lib/services/expService';
 import { formatFocusMinutes } from '@/lib/utils';
 
@@ -32,6 +32,23 @@ interface ProjectFocusData {
   focusMinutes: number;
   status: string;
 }
+
+const formatChartFocusMinutes = (value: unknown) => {
+  const minutes = typeof value === 'number'
+    ? value
+    : typeof value === 'string'
+      ? Number(value)
+      : 0;
+  const safeMinutes = Number.isFinite(minutes) ? Math.max(0, Math.round(minutes)) : 0;
+
+  if (safeMinutes < 60) {
+    return `${safeMinutes}分钟`;
+  }
+
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+  return `${hours}小时${remainingMinutes}分钟`;
+};
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -302,7 +319,7 @@ export default function DashboardPage() {
 
       const monthlyData = [];
       let weekNum = 1;
-      let currentWeekStart = new Date(monthStart);
+      const currentWeekStart = new Date(monthStart);
 
       while (currentWeekStart <= monthEnd) {
         const currentWeekEnd = new Date(currentWeekStart);
@@ -864,7 +881,7 @@ export default function DashboardPage() {
 
                               // 根据任务状态选择颜色
                               let bgGradient = 'from-emerald-400/90 via-emerald-500/90 to-teal-500/90';
-                              let textColor = 'text-white';
+                              const textColor = 'text-white';
                               let shadowColor = 'shadow-emerald-500/30';
 
                               if (item.task.status === 'completed') {
@@ -933,7 +950,7 @@ export default function DashboardPage() {
           <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md">
             <h3 className="text-xl font-light text-gray-900 mb-6">本周专注时长</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={pomodoroStats.weeklyData}>
+              <LineChart data={pomodoroStats.weeklyData} margin={{ top: 28, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#d1fae5" />
                 <XAxis
                   dataKey="date"
@@ -952,7 +969,7 @@ export default function DashboardPage() {
                     borderRadius: '8px',
                     fontSize: '12px'
                   }}
-                  formatter={(value: any) => [`${value} 分钟`, '专注时长']}
+                  formatter={(value) => [formatChartFocusMinutes(value), '专注时长']}
                 />
                 <Line
                   type="monotone"
@@ -965,6 +982,7 @@ export default function DashboardPage() {
                   <LabelList
                     dataKey="minutes"
                     position="top"
+                    formatter={formatChartFocusMinutes}
                     style={{ fill: '#059669', fontSize: '12px', fontWeight: 'bold' }}
                   />
                 </Line>
@@ -976,7 +994,7 @@ export default function DashboardPage() {
           <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-3xl border border-teal-300 p-6 shadow-md">
             <h3 className="text-xl font-light text-gray-900 mb-6">本月专注时长</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={pomodoroStats.monthlyData}>
+              <BarChart data={pomodoroStats.monthlyData} margin={{ top: 28, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ccfbf1" />
                 <XAxis
                   dataKey="week"
@@ -995,9 +1013,10 @@ export default function DashboardPage() {
                     borderRadius: '8px',
                     fontSize: '12px'
                   }}
-                  formatter={(value: any, name: any, props: any) => {
-                    const dateRange = props.payload.dateRange;
-                    return [`${value} 分钟 (${dateRange})`, '专注时长'];
+                  formatter={(value, _name, props: any) => {
+                    const dateRange = props?.payload?.dateRange;
+                    const formattedValue = formatChartFocusMinutes(value);
+                    return [dateRange ? `${formattedValue} (${dateRange})` : formattedValue, '专注时长'];
                   }}
                 />
                 <Bar
@@ -1008,6 +1027,7 @@ export default function DashboardPage() {
                   <LabelList
                     dataKey="minutes"
                     position="top"
+                    formatter={formatChartFocusMinutes}
                     style={{ fill: '#0f766e', fontSize: '12px', fontWeight: 'bold' }}
                   />
                 </Bar>
@@ -1071,7 +1091,7 @@ export default function DashboardPage() {
                           style={{ width: `${widthPercent}%` }}
                         >
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white font-semibold text-sm">
-                            {project.focusMinutes} 分钟
+                            {formatChartFocusMinutes(project.focusMinutes)}
                           </div>
                         </div>
                       </div>

@@ -28,7 +28,7 @@ export default function Home() {
             </h1>
 
             <p className="text-lg md:text-xl lg:text-2xl text-emerald-50/90 font-light italic tracking-wide">
-              "Grow together, bloom together"
+              &quot;Grow together, bloom together&quot;
             </p>
           </div>
 
