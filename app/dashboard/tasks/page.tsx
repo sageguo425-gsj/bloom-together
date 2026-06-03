@@ -232,8 +232,10 @@ export default function TasksPage() {
     );
   };
 
+  const incompleteTasks = tasks.filter((task) => task.status !== 'completed');
+
   const filteredTasks = tasks.filter((task) => {
-    if (activeFilter === 'all') return true;
+    if (activeFilter === 'all') return task.status !== 'completed';
     return task.status === activeFilter;
   });
 
@@ -332,7 +334,7 @@ export default function TasksPage() {
                   : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
               }`}
             >
-              全部 ({tasks.length})
+              全部 ({incompleteTasks.length})
             </button>
             <button
               onClick={() => setActiveFilter('pending')}
