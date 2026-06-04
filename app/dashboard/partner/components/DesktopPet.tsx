@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { GripHorizontal, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   CouplePet,
@@ -152,6 +152,7 @@ export function DesktopPet() {
             user2_id: user2Id,
             name: '阿凛',
             species: 'german_shepherd',
+            hunger: 0,
           })
           .select('*')
           .single()
@@ -222,7 +223,7 @@ export function DesktopPet() {
     window.setTimeout(() => setIsPetting(false), 1400)
   }
 
-  const handleDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     setDragOffset({
       x: window.innerWidth - event.clientX - position.x,
@@ -268,16 +269,6 @@ export function DesktopPet() {
       style={{ right: position.x, bottom: position.y }}
     >
       <div className={`relative transition-all ${dragOffset ? 'cursor-grabbing' : ''}`}>
-        <button
-          type="button"
-          onPointerDown={handleDragStart}
-          className="absolute left-1/2 top-2 z-30 -translate-x-1/2 translate-y-1 rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-emerald-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:bg-white group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"
-          aria-label="拖动桌宠"
-          title="拖动阿凛"
-        >
-          <GripHorizontal className="h-3.5 w-3.5" />
-        </button>
-
         {showFoods && (
           <div className="absolute bottom-[calc(100%-0.5rem)] right-2 z-30 mb-2 rounded-2xl border border-white/70 bg-white/90 p-2 shadow-xl backdrop-blur-md">
             <div className="grid grid-cols-3 gap-1.5">
@@ -315,6 +306,7 @@ export function DesktopPet() {
           showHungryHint={false}
           onFeedClick={handleFeedShortcut}
           onPetClick={handlePet}
+          onPetPointerDown={handleDragStart}
         />
       </div>
     </div>

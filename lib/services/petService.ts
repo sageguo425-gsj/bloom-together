@@ -152,7 +152,7 @@ export function getFallbackPet(coupleKey: string, userId: string, partnerId: str
     name: '阿凛',
     species: 'german_shepherd',
     growth: 0,
-    hunger: 70,
+    hunger: 0,
     happiness: 70,
     cleanliness: 80,
     last_fed_at: null,

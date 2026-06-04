@@ -93,6 +93,7 @@ export function PartnerPet({
         user2_id: user2Id,
         name: '阿凛',
         species: 'german_shepherd',
+        hunger: 0,
       })
       .select('*')
       .single()

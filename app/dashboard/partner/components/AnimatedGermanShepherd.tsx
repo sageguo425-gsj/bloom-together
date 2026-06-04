@@ -13,6 +13,7 @@ interface AnimatedGermanShepherdProps {
   showHungryHint?: boolean
   onFeedClick?: () => void
   onPetClick?: () => void
+  onPetPointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void
 }
 
 export function AnimatedGermanShepherd({
@@ -25,6 +26,7 @@ export function AnimatedGermanShepherd({
   showHungryHint = true,
   onFeedClick,
   onPetClick,
+  onPetPointerDown,
 }: AnimatedGermanShepherdProps) {
   const stageScale = [0.78, 0.86, 0.94, 1, 1.06][stageIndex] ?? 0.94
   const isHungry = hunger < 30
@@ -32,12 +34,13 @@ export function AnimatedGermanShepherd({
   const satietyValue = Math.min(Math.max(Math.round(hunger), 0), 100)
 
   return (
-    <div className="group relative flex w-full max-w-[360px] flex-col items-center justify-end outline-none">
-      <div className="absolute right-2 top-2 z-20 flex translate-y-1 gap-2 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
+    <div className="group relative flex w-full max-w-[360px] flex-col items-center justify-end pt-10 outline-none">
+      <div className="absolute right-0 top-0 z-30 flex translate-y-1 gap-2 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
         <button
           type="button"
           onClick={onFeedClick}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/90 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm backdrop-blur-sm transition-all hover:bg-emerald-50 hover:shadow-md"
+          onPointerDown={(event) => event.stopPropagation()}
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/95 px-3.5 py-2 text-sm font-semibold text-emerald-700 shadow-lg shadow-emerald-950/10 backdrop-blur-sm transition-all hover:bg-emerald-50 hover:shadow-md"
         >
           <Utensils className="h-3.5 w-3.5" />
           喂食
@@ -45,7 +48,8 @@ export function AnimatedGermanShepherd({
         <button
           type="button"
           onClick={onPetClick}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/90 px-3 py-1.5 text-xs font-semibold text-rose-600 shadow-sm backdrop-blur-sm transition-all hover:bg-rose-50 hover:shadow-md"
+          onPointerDown={(event) => event.stopPropagation()}
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/95 px-3.5 py-2 text-sm font-semibold text-rose-600 shadow-lg shadow-rose-950/10 backdrop-blur-sm transition-all hover:bg-rose-50 hover:shadow-md"
         >
           <HandHeart className="h-3.5 w-3.5" />
           抚摸
@@ -60,6 +64,7 @@ export function AnimatedGermanShepherd({
       />
 
       <div
+        onPointerDown={onPetPointerDown}
         className={`relative z-10 w-full transition-all duration-500 ${
           isFeeding
             ? 'animate-bounce'
@@ -103,7 +108,7 @@ export function AnimatedGermanShepherd({
       )}
       </div>
 
-      <div className={`relative z-20 mt-1 w-[min(82%,260px)] rounded-full border border-white/70 bg-white/85 px-3 py-2 shadow-sm backdrop-blur-sm transition-all duration-200 ${
+      <div className={`relative z-20 mt-1 w-[min(74%,220px)] rounded-full border border-white/70 bg-white/90 px-3 py-2 shadow-lg shadow-emerald-950/10 backdrop-blur-sm transition-all duration-200 ${
         satietyMode === 'hover'
           ? 'translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100'
           : ''
