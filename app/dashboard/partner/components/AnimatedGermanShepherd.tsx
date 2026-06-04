@@ -9,6 +9,8 @@ interface AnimatedGermanShepherdProps {
   happiness?: number
   isFeeding?: boolean
   isPetting?: boolean
+  satietyMode?: 'always' | 'hover'
+  showHungryHint?: boolean
   onFeedClick?: () => void
   onPetClick?: () => void
 }
@@ -19,13 +21,15 @@ export function AnimatedGermanShepherd({
   happiness = 70,
   isFeeding = false,
   isPetting = false,
+  satietyMode = 'always',
+  showHungryHint = true,
   onFeedClick,
   onPetClick,
 }: AnimatedGermanShepherdProps) {
   const stageScale = [0.78, 0.86, 0.94, 1, 1.06][stageIndex] ?? 0.94
   const isHungry = hunger < 30
   const isHappy = happiness > 75 || isFeeding || isPetting
-  const hungerValue = Math.min(Math.max(Math.round(hunger), 0), 100)
+  const satietyValue = Math.min(Math.max(Math.round(hunger), 0), 100)
 
   return (
     <div className="group relative flex w-full max-w-[360px] flex-col items-center justify-end outline-none">
@@ -78,7 +82,7 @@ export function AnimatedGermanShepherd({
         />
       </div>
 
-      {isHungry && !isFeeding && (
+      {showHungryHint && isHungry && !isFeeding && (
         <div className="absolute left-8 top-8 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-amber-700 shadow-sm">
           有点饿啦
         </div>
@@ -99,17 +103,21 @@ export function AnimatedGermanShepherd({
       )}
       </div>
 
-      <div className="relative z-20 mt-1 w-[min(82%,260px)] rounded-full border border-white/70 bg-white/85 px-3 py-2 shadow-sm backdrop-blur-sm">
+      <div className={`relative z-20 mt-1 w-[min(82%,260px)] rounded-full border border-white/70 bg-white/85 px-3 py-2 shadow-sm backdrop-blur-sm transition-all duration-200 ${
+        satietyMode === 'hover'
+          ? 'translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100'
+          : ''
+      }`}>
         <div className="mb-1 flex items-center justify-between text-xs font-medium text-gray-700">
-          <span>饥饿值</span>
-          <span className={isHungry ? 'text-amber-700' : 'text-emerald-700'}>{hungerValue}/100</span>
+          <span>饱腹感</span>
+          <span className={isHungry ? 'text-amber-700' : 'text-emerald-700'}>{satietyValue}/100</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-emerald-100">
           <div
             className={`h-full rounded-full transition-all duration-500 ${
               isHungry ? 'bg-amber-400' : 'bg-gradient-to-r from-emerald-400 to-teal-500'
             }`}
-            style={{ width: `${hungerValue}%` }}
+            style={{ width: `${satietyValue}%` }}
           />
         </div>
       </div>

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { GripHorizontal, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -44,7 +43,6 @@ export function DesktopPet() {
   const [feedingType, setFeedingType] = useState<PetFoodType | null>(null)
   const [isPetting, setIsPetting] = useState(false)
   const [showFoods, setShowFoods] = useState(false)
-  const [message, setMessage] = useState('')
   const [position, setPosition] = useState<PetPosition>(DEFAULT_POSITION)
   const [dragOffset, setDragOffset] = useState<PetPosition | null>(null)
 
@@ -217,12 +215,10 @@ export function DesktopPet() {
 
   const handleFeedShortcut = () => {
     setShowFoods((visible) => !visible)
-    setMessage('选一个小零食给阿凛吧')
   }
 
   const handlePet = () => {
     setIsPetting(true)
-    setMessage('阿凛开心地蹭了蹭你')
     window.setTimeout(() => setIsPetting(false), 1400)
   }
 
@@ -241,7 +237,6 @@ export function DesktopPet() {
     if (!food) return
 
     if (context.availableExp < food.expCost) {
-      setMessage('可用经验不够，先完成一点任务吧')
       return
     }
 
@@ -251,7 +246,6 @@ export function DesktopPet() {
       const result = await feedCouplePet(context.pet.id, foodType)
 
       if (!result.success || !result.data) {
-        setMessage(result.message || '喂食失败，请稍后再试')
         return
       }
 
@@ -261,7 +255,6 @@ export function DesktopPet() {
         availableExp: result.data.available_exp,
       })
       setShowFoods(false)
-      setMessage(`阿凛吃掉了${food.name}`)
     } finally {
       setFeedingType(null)
     }
@@ -271,16 +264,14 @@ export function DesktopPet() {
 
   return (
     <div
-      className="fixed z-40 hidden w-[210px] select-none sm:block"
+      className="group fixed z-40 hidden w-[210px] select-none sm:block"
       style={{ right: position.x, bottom: position.y }}
     >
-      <div className={`relative rounded-[1.75rem] border border-white/50 bg-white/20 p-3 shadow-2xl shadow-emerald-950/20 backdrop-blur-md transition-shadow ${
-        dragOffset ? 'cursor-grabbing shadow-emerald-950/35' : ''
-      }`}>
+      <div className={`relative transition-all ${dragOffset ? 'cursor-grabbing' : ''}`}>
         <button
           type="button"
           onPointerDown={handleDragStart}
-          className="absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-emerald-700 shadow-sm backdrop-blur-sm transition-all hover:bg-white"
+          className="absolute left-1/2 top-2 z-30 -translate-x-1/2 translate-y-1 rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-emerald-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:bg-white group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"
           aria-label="拖动桌宠"
           title="拖动阿凛"
         >
@@ -320,21 +311,11 @@ export function DesktopPet() {
           happiness={context.pet.happiness}
           isFeeding={isFeeding}
           isPetting={isPetting}
+          satietyMode="hover"
+          showHungryHint={false}
           onFeedClick={handleFeedShortcut}
           onPetClick={handlePet}
         />
-
-        <div className="mt-2 flex items-center justify-between gap-2 px-1">
-          <p className="min-h-4 flex-1 truncate text-xs font-medium text-emerald-900">
-            {message || '阿凛在这里陪你'}
-          </p>
-          <Link
-            href="/dashboard/partner"
-            className="shrink-0 rounded-full bg-white/75 px-2.5 py-1 text-xs font-semibold text-emerald-700 transition-all hover:bg-white"
-          >
-            小窝
-          </Link>
-        </div>
       </div>
     </div>
   )
