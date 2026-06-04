@@ -97,7 +97,7 @@ export function getPetGrowthProgress(growth: number) {
 }
 
 export function getPetMoodText(pet: CouplePet) {
-  if (pet.hunger < 25) return '小萨摩耶有点饿了，正在等饭饭'
+  if (pet.hunger < 25) return '小德牧有点饿了，正在等饭饭'
   if (pet.happiness < 30) return '它想和你们多待一会儿'
   if (pet.hunger > 80 && pet.happiness > 80) return '它被照顾得很好，尾巴摇个不停'
   return '它乖乖趴在你们的小窝旁'
@@ -149,8 +149,8 @@ export function getFallbackPet(coupleKey: string, userId: string, partnerId: str
     couple_key: coupleKey,
     user1_id: user1Id,
     user2_id: user2Id,
-    name: '小雪球',
-    species: 'samoyed',
+    name: '阿凛',
+    species: 'german_shepherd',
     growth: 0,
     hunger: 70,
     happiness: 70,

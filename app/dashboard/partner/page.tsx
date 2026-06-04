@@ -86,8 +86,8 @@ export default async function PartnerPage() {
         couple_key: coupleKey,
         user1_id: user1Id,
         user2_id: user2Id,
-        name: '小雪球',
-        species: 'samoyed',
+        name: '阿凛',
+        species: 'german_shepherd',
       })
       .select('*')
       .single()

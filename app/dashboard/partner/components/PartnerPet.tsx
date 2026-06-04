@@ -10,6 +10,7 @@ import {
   getPetGrowthProgress,
 } from '@/lib/services/petService'
 import { createClient } from '@/lib/supabase/client'
+import { AnimatedGermanShepherd } from './AnimatedGermanShepherd'
 
 interface PartnerPetProps {
   initialPet: CouplePet | null
@@ -18,14 +19,6 @@ interface PartnerPetProps {
   currentUserId: string
   partnerId: string
 }
-
-const PET_STAGE_DISPLAY = [
-  { width: 260, height: 190 },
-  { width: 260, height: 260 },
-  { width: 250, height: 320 },
-  { width: 230, height: 320 },
-  { width: 220, height: 325 },
-]
 
 export function PartnerPet({
   initialPet,
@@ -38,10 +31,11 @@ export function PartnerPet({
   const [availableExp, setAvailableExp] = useState(initialAvailableExp)
   const [message, setMessage] = useState('')
   const [feedingType, setFeedingType] = useState<PetFoodType | null>(null)
+  const [isPetting, setIsPetting] = useState(false)
+  const [showFeedHint, setShowFeedHint] = useState(false)
 
   const growthInfo = getPetGrowthProgress(pet?.growth ?? 0)
   const stageIndex = growthInfo.stage.index
-  const stageDisplay = PET_STAGE_DISPLAY[stageIndex] ?? PET_STAGE_DISPLAY[0]
   const isFeeding = feedingType !== null
 
   useEffect(() => {
@@ -97,8 +91,8 @@ export function PartnerPet({
         couple_key: coupleKey,
         user1_id: user1Id,
         user2_id: user2Id,
-        name: '小雪球',
-        species: 'samoyed',
+        name: '阿凛',
+        species: 'german_shepherd',
       })
       .select('*')
       .single()
@@ -140,6 +134,7 @@ export function PartnerPet({
     }
 
     setFeedingType(foodType)
+    setShowFeedHint(false)
     setMessage('')
 
     try {
@@ -157,10 +152,21 @@ export function PartnerPet({
       const feedResult = result.data
       setPet(feedResult.pet)
       setAvailableExp(feedResult.available_exp)
-      setMessage(`萨摩耶成长 +${feedResult.growth_gain}，开心地摇了摇尾巴`)
+      setMessage(`德牧成长 +${feedResult.growth_gain}，开心地摇了摇尾巴`)
     } finally {
       setFeedingType(null)
     }
+  }
+
+  const handleFeedShortcut = () => {
+    setShowFeedHint(true)
+    setMessage('选择下方食物喂给阿凛吧')
+  }
+
+  const handlePet = () => {
+    setIsPetting(true)
+    setMessage('阿凛眯起眼睛蹭了蹭你的手')
+    window.setTimeout(() => setIsPetting(false), 1400)
   }
 
   return (
@@ -172,18 +178,15 @@ export function PartnerPet({
         </div>
       </div>
 
-      <div className="flex-1 flex min-h-[210px] items-end justify-center">
-        <div
-          className="bg-no-repeat"
-          style={{
-            width: `min(100%, ${stageDisplay.width}px)`,
-            height: `${stageDisplay.height}px`,
-            backgroundImage: 'url(/pets/samoyed-stages-transparent.png)',
-            backgroundSize: '500% auto',
-            backgroundPosition: `${stageIndex * 25}% 100%`,
-          }}
-          role="img"
-          aria-label="白色萨摩耶宠物"
+      <div className="flex-1 flex min-h-[250px] items-end justify-center">
+        <AnimatedGermanShepherd
+          stageIndex={stageIndex}
+          hunger={pet?.hunger}
+          happiness={pet?.happiness}
+          isFeeding={isFeeding}
+          isPetting={isPetting}
+          onFeedClick={handleFeedShortcut}
+          onPetClick={handlePet}
         />
       </div>
 
@@ -196,7 +199,9 @@ export function PartnerPet({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid grid-cols-3 gap-2 rounded-2xl transition-all duration-300 ${
+        showFeedHint ? 'bg-white/45 p-2 ring-2 ring-emerald-300/70' : ''
+      }`}>
         {PET_FOODS.map((food) => {
           const unavailable = availableExp < food.expCost
           const isCurrentFood = feedingType === food.type
