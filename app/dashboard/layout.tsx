@@ -3,8 +3,13 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { DashboardNav } from './partner/components/DashboardNav';
-import { DesktopPet } from './partner/components/DesktopPet';
+
+const DesktopPet = dynamic(
+  () => import('./partner/components/DesktopPet').then((mod) => mod.DesktopPet),
+  { ssr: false, loading: () => null }
+);
 
 export default function DashboardLayout({
   children,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [partnerInfo, setPartnerInfo] = useState<{ username: string; avatar?: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const loadedTaskDateRef = useRef<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -78,10 +79,11 @@ export default function DashboardPage() {
       }
 
       setUser(user);
+      loadedTaskDateRef.current = selectedDate;
 
       // 并行加载所有数据，即使某些失败也不影响其他
       await Promise.allSettled([
-        loadTodayTasks(user.id),
+        loadTodayTasks(user.id, selectedDate),
         loadHabitStats(user.id),
         loadProjectStats(user.id),
         loadPartnerInfo(user.id),
@@ -110,7 +112,7 @@ export default function DashboardPage() {
 
   // 监听 selectedDate 变化，重新加载任务
   useEffect(() => {
-    if (user) {
+    if (user && loadedTaskDateRef.current !== selectedDate) {
       loadTodayTasks(user.id, selectedDate);
     }
   }, [selectedDate, user]);
@@ -127,39 +129,34 @@ export default function DashboardPage() {
 
       if (error) throw error;
 
-      // 加载关联的项目和习惯信息
-      const tasksWithRelations = await Promise.all(
-        (data || []).map(async (task) => {
-          let projectName = null;
-          let habitName = null;
+      const taskRows = data || [];
+      const projectIds = [...new Set(taskRows.map((task) => task.project_id).filter(Boolean))];
+      const habitIds = [...new Set(taskRows.map((task) => task.habit_id).filter(Boolean))];
 
-          if (task.project_id) {
-            const { data: project } = await supabase
-              .from('projects')
-              .select('title')
-              .eq('id', task.project_id)
-              .single();
-            projectName = project?.title;
-          }
+      const [projectsResult, habitsResult] = await Promise.all([
+        projectIds.length > 0
+          ? supabase.from('projects').select('id, title').in('id', projectIds)
+          : Promise.resolve({ data: [] }),
+        habitIds.length > 0
+          ? supabase.from('habits').select('id, name').in('id', habitIds)
+          : Promise.resolve({ data: [] }),
+      ]);
 
-          if (task.habit_id) {
-            const { data: habit } = await supabase
-              .from('habits')
-              .select('name')
-              .eq('id', task.habit_id)
-              .single();
-            habitName = habit?.name;
-          }
-
-          return {
-            ...task,
-            projectName,
-            habitName,
-          };
-        })
+      const projectNameById = new Map(
+        (projectsResult.data || []).map((project) => [project.id, project.title])
+      );
+      const habitNameById = new Map(
+        (habitsResult.data || []).map((habit) => [habit.id, habit.name])
       );
 
+      const tasksWithRelations = taskRows.map((task) => ({
+        ...task,
+        projectName: task.project_id ? projectNameById.get(task.project_id) || null : null,
+        habitName: task.habit_id ? habitNameById.get(task.habit_id) || null : null,
+      }));
+
       setTodayTasks(tasksWithRelations as any);
+      loadedTaskDateRef.current = targetDate;
     } catch (error) {
       console.error('加载任务失败:', error);
     }
@@ -268,54 +265,68 @@ export default function DashboardPage() {
   const loadPomodoroStats = async (userId: string) => {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const startOfDay = (date: Date) => {
+        const result = new Date(date);
+        result.setHours(0, 0, 0, 0);
+        return result;
+      };
+      const endOfDay = (date: Date) => {
+        const result = new Date(date);
+        result.setHours(23, 59, 59, 999);
+        return result;
+      };
 
-      // 获取今日完成的番茄钟会话
-      const { data: todayData, error: todayError } = await supabase
-        .from('pomodoro_sessions')
-        .select('duration')
-        .eq('user_id', userId)
-        .eq('completed', true)
-        .gte('started_at', `${today}T00:00:00`)
-        .lte('started_at', `${today}T23:59:59`);
-
-      if (todayError) {
-        console.error('获取今日番茄钟统计失败:', todayError);
-      }
-
-      // 计算今日总专注时长（秒转分钟）
-      const todaySeconds = todayData?.reduce((sum, session) => sum + session.duration, 0) || 0;
-      const todayMinutes = Math.round(todaySeconds / 60);
-
-      // 获取本周数据（周一到周日）
       const weekStart = new Date(now);
       weekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)); // 周一
       weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = endOfDay(new Date(weekStart));
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      const monthStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+      const monthEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      const rangeStart = new Date(Math.min(weekStart.getTime(), monthStart.getTime()));
+      const rangeEnd = new Date(Math.max(weekEnd.getTime(), monthEnd.getTime()));
+
+      const { data: sessions, error } = await supabase
+        .from('pomodoro_sessions')
+        .select('duration, started_at')
+        .eq('user_id', userId)
+        .eq('completed', true)
+        .gte('started_at', rangeStart.toISOString())
+        .lte('started_at', rangeEnd.toISOString());
+
+      if (error) {
+        console.error('获取番茄钟统计失败:', error);
+      }
+
+      const completedSessions = sessions || [];
+      const sumMinutesInRange = (start: Date, end: Date) => {
+        const totalSeconds = completedSessions.reduce((sum, session) => {
+          const startedAt = new Date(session.started_at).getTime();
+
+          if (startedAt >= start.getTime() && startedAt <= end.getTime()) {
+            return sum + session.duration;
+          }
+
+          return sum;
+        }, 0);
+
+        return Math.round(totalSeconds / 60);
+      };
+
+      const todayMinutes = sumMinutesInRange(startOfDay(now), endOfDay(now));
 
       const weeklyData = [];
       for (let i = 0; i < 7; i++) {
         const date = new Date(weekStart);
         date.setDate(weekStart.getDate() + i);
-        const dateStr = date.toISOString().split('T')[0];
+        const minutes = sumMinutesInRange(startOfDay(date), endOfDay(date));
 
-        const { data: dayData } = await supabase
-          .from('pomodoro_sessions')
-          .select('duration')
-          .eq('user_id', userId)
-          .eq('completed', true)
-          .gte('started_at', `${dateStr}T00:00:00`)
-          .lte('started_at', `${dateStr}T23:59:59`);
-
-        const minutes = Math.round((dayData?.reduce((sum, s) => sum + s.duration, 0) || 0) / 60);
         weeklyData.push({
           date: date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }),
           minutes
         });
       }
-
-      // 获取本月数据（按周统计）
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
       const monthlyData = [];
       let weekNum = 1;
@@ -326,16 +337,7 @@ export default function DashboardPage() {
         currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
 
         const endDate = currentWeekEnd > monthEnd ? monthEnd : currentWeekEnd;
-
-        const { data: weekData } = await supabase
-          .from('pomodoro_sessions')
-          .select('duration')
-          .eq('user_id', userId)
-          .eq('completed', true)
-          .gte('started_at', currentWeekStart.toISOString())
-          .lte('started_at', `${endDate.toISOString().split('T')[0]}T23:59:59`);
-
-        const minutes = Math.round((weekData?.reduce((sum, s) => sum + s.duration, 0) || 0) / 60);
+        const minutes = sumMinutesInRange(startOfDay(currentWeekStart), endOfDay(endDate));
 
         // 格式化日期范围
         const startMonth = currentWeekStart.getMonth() + 1;
@@ -390,46 +392,43 @@ export default function DashboardPage() {
         return;
       }
 
-      // 为每个项目计算专注时长
-      const projectFocusPromises = projects.map(async (project) => {
-        // 获取该项目下的所有任务ID
-        const { data: tasks } = await supabase
-          .from('tasks')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('project_id', project.id);
+      const projectIds = projects.map((project) => project.id);
+      const { data: tasks } = await supabase
+        .from('tasks')
+        .select('id, project_id')
+        .eq('user_id', userId)
+        .in('project_id', projectIds);
 
-        if (!tasks || tasks.length === 0) {
-          return {
-            projectId: project.id,
-            projectTitle: project.title,
-            focusMinutes: 0,
-            status: project.status
-          };
-        }
+      const taskRows = tasks || [];
+      const taskIds = taskRows.map((task) => task.id);
+      const projectIdByTaskId = new Map(taskRows.map((task) => [task.id, task.project_id]));
+      const focusSecondsByProjectId = new Map<number, number>();
 
-        const taskIds = tasks.map(t => t.id);
-
-        // 获取这些任务的所有完成的番茄钟会话
+      if (taskIds.length > 0) {
         const { data: sessions } = await supabase
           .from('pomodoro_sessions')
-          .select('duration')
+          .select('duration, task_id')
           .eq('user_id', userId)
           .eq('completed', true)
           .in('task_id', taskIds);
 
-        const totalSeconds = sessions?.reduce((sum, s) => sum + s.duration, 0) || 0;
-        const totalMinutes = Math.round(totalSeconds / 60);
+        for (const session of sessions || []) {
+          const projectId = projectIdByTaskId.get(session.task_id);
+          if (!projectId) continue;
 
-        return {
-          projectId: project.id,
-          projectTitle: project.title,
-          focusMinutes: totalMinutes,
-          status: project.status
-        };
-      });
+          focusSecondsByProjectId.set(
+            projectId,
+            (focusSecondsByProjectId.get(projectId) || 0) + session.duration
+          );
+        }
+      }
 
-      const projectFocusResults = await Promise.all(projectFocusPromises);
+      const projectFocusResults = projects.map((project) => ({
+        projectId: project.id,
+        projectTitle: project.title,
+        focusMinutes: Math.round((focusSecondsByProjectId.get(project.id) || 0) / 60),
+        status: project.status
+      }));
 
       // 按专注时长降序排序
       projectFocusResults.sort((a, b) => b.focusMinutes - a.focusMinutes);
@@ -450,9 +449,6 @@ export default function DashboardPage() {
     }
     const newDate = currentDate.toISOString().split('T')[0];
     setSelectedDate(newDate);
-    if (user) {
-      loadTodayTasks(user.id, newDate);
-    }
   };
 
   const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {

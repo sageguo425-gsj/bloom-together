@@ -83,7 +83,7 @@ export function AnimatedGermanShepherd({
           width={420}
           height={368}
           className="h-auto w-full select-none object-contain"
-          priority
+          sizes="(min-width: 640px) 210px, 0px"
         />
       </div>
 

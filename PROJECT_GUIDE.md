@@ -15,9 +15,10 @@
 ## 🛠️ 技术栈
 
 ### 前端
-- **框架**：Next.js 14 (App Router)
+- **框架**：Next.js 16.2.6 (App Router)
+- **运行时**：React 19.2.4
 - **语言**：TypeScript
-- **样式**：Tailwind CSS
+- **样式**：Tailwind CSS 4
 - **UI组件**：自定义组件 + Lucide Icons
 - **图表**：Recharts
 
@@ -54,7 +55,10 @@ planning-app/
 │   │   ├── pomodoro/           # 番茄钟
 │   │   ├── partner/            # 伴侣空间
 │   │   │   └── components/
-│   │   │       └── DashboardNav.tsx  # 全局导航栏
+│   │   │       ├── DashboardNav.tsx  # 全局导航栏
+│   │   │       ├── PartnerPet.tsx    # 伴侣空间宠物面板
+│   │   │       ├── DesktopPet.tsx    # 全站桌面宠物
+│   │   │       └── AnimatedGermanShepherd.tsx # 德牧宠物形象与互动
 │   │   └── layout.tsx          # Dashboard 布局
 │   ├── login/                   # 登录页
 │   ├── register/                # 注册页
@@ -71,6 +75,7 @@ planning-app/
 │   ├── services/               # 业务逻辑服务
 │   │   ├── userService.ts
 │   │   ├── partnerService.ts
+│   │   ├── petService.ts       # 伴侣宠物服务
 │   │   └── expService.ts       # 经验系统服务
 │   └── utils/                  # 工具函数
 │       └── levelSystem.ts      # 等级计算工具
@@ -81,6 +86,7 @@ planning-app/
 ├── supabase/
 │   └── migrations/             # 数据库迁移文件
 └── public/                     # 静态资源
+    └── pets/                   # 宠物图片资源
 ```
 
 ---
@@ -98,6 +104,7 @@ planning-app/
 - partner_id: UUID (关联其他用户)
 - level: INTEGER (等级，默认1)
 - exp: INTEGER (经验值，默认0)
+- exp_spent: INTEGER (宠物喂食已消耗经验，默认0)
 - created_at: TIMESTAMP
 ```
 
@@ -161,7 +168,7 @@ planning-app/
 - description: TEXT
 - start_date: DATE
 - end_date: DATE
-- status: TEXT (active/completed/archived)
+- status: TEXT (pending/in_progress/completed)
 - priority: TEXT (high/medium/low)
 - is_shared: BOOLEAN
 - created_at: TIMESTAMP
@@ -186,6 +193,36 @@ planning-app/
 - user_id: UUID (外键 -> users)
 - name: TEXT
 - color: TEXT
+- created_at: TIMESTAMP
+```
+
+#### 8. couple_pets（伴侣宠物表）
+```sql
+- id: UUID (主键)
+- couple_key: TEXT (伴侣双方稳定键，唯一)
+- user1_id: UUID (外键 -> users)
+- user2_id: UUID (外键 -> users)
+- name: TEXT (默认“阿凛”)
+- species: TEXT (默认 german_shepherd)
+- growth: INTEGER (成长值)
+- hunger: INTEGER (数据库字段名，前端显示为“饱腹感”，默认0，范围0-100)
+- happiness: INTEGER (快乐值，范围0-100)
+- cleanliness: INTEGER (清洁度，范围0-100)
+- last_fed_at: TIMESTAMP
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+```
+
+#### 9. pet_feed_logs（宠物喂食记录表）
+```sql
+- id: UUID (主键)
+- pet_id: UUID (外键 -> couple_pets)
+- user_id: UUID (外键 -> users)
+- food_type: TEXT (bone/beef/cake)
+- exp_cost: INTEGER
+- growth_gain: INTEGER
+- hunger_gain: INTEGER (前端语义为饱腹感增加值)
+- happiness_gain: INTEGER
 - created_at: TIMESTAMP
 ```
 
@@ -222,6 +259,8 @@ planning-app/
   - 项目专注时长（横向条形图）
     - 默认显示未完成项目
     - 可选择显示已完成项目
+  - 图表顶部预留标签空间，避免数值被卡片边框遮挡
+  - 时间格式统一：不足1小时显示“X分钟”，达到1小时显示“X小时Y分钟”
 
 **关键函数**：
 - `loadTodayTasks()` - 加载指定日期的任务
@@ -237,6 +276,8 @@ planning-app/
 - 任务列表展示（卡片式）
 - 创建/编辑/删除任务
 - 任务筛选（按状态、优先级）
+  - “全部”只显示未完成任务，即 `pending` + `in_progress`
+  - “已完成”作为独立筛选入口查看历史完成任务
 - 任务排序（按日期、优先级、创建时间）
 - 批量操作
 - 启动番茄钟
@@ -265,7 +306,10 @@ planning-app/
 **功能**：
 - 项目列表展示
 - 创建/编辑/删除项目
-- 项目状态管理（进行中/已完成/已归档）
+- 项目筛选：
+  - “全部”只显示未完成项目，即 `pending` + `in_progress`
+  - “已完成”作为独立筛选入口查看历史完成项目
+- 项目状态管理（未开始/进行中/已完成）
 - 项目日记功能
 - 项目任务关联
 
@@ -299,6 +343,24 @@ planning-app/
 - 伴侣连接/解除
 - 共享任务和项目
 - 伴侣动态查看
+- 伴侣宠物：
+  - 德牧宠物“阿凛”，兼具可爱和帅气的卡通风格
+  - 伴侣双方共享同一只宠物，数据通过 `couple_key` 绑定
+  - 宠物成长值、饱腹感、快乐值实时同步
+  - 喂食会消耗用户可用经验（`exp - exp_spent`），并增加成长值、饱腹感和快乐值
+  - 食物配置：
+    - 骨头：消耗1 EXP，成长+1，饱腹感+8，快乐+1
+    - 牛肉：消耗5 EXP，成长+8，饱腹感+30，快乐+5，每对伴侣每天最多3次
+    - 小蛋糕：消耗10 EXP，成长+20，饱腹感+15，快乐+20，每对伴侣每天最多2次
+  - 右下角桌面宠物在 Dashboard 各页面独立显示；无背景卡片，只显示宠物本体
+  - 鼠标悬停宠物时显示“喂食”“抚摸”按钮和饱腹感进度条
+  - 直接拖动宠物本体即可移动位置，位置保存到 `localStorage`
+
+**关键文件/函数**：
+- `DesktopPet.tsx` - 全站桌面宠物容器、位置保存、喂食菜单
+- `AnimatedGermanShepherd.tsx` - 宠物形象、悬停按钮、饱腹感显示、互动动画
+- `petService.ts` - 食物配置、成长阶段、喂食 RPC 封装
+- `feed_couple_pet()` - Supabase RPC，负责经验消耗、宠物数值更新和喂食次数限制
 
 ### 7. 经验与等级系统
 **文件**：
@@ -309,6 +371,9 @@ planning-app/
 - **经验获取**：
   - 完成一个任务：+10 EXP
   - 习惯打卡一次：+10 EXP
+- **经验消耗**：
+  - 宠物喂食会增加 `users.exp_spent`
+  - 可用经验 = `exp - exp_spent`
 - **等级曲线**：`100 × (level - 1) + 50 × (level - 1)²`
 - **等级称号**：
   - Lv.1-5：🌱 萌芽期
@@ -405,6 +470,18 @@ git push
 - 任务完成时调用 `addExpForTaskCompletion()`
 - 习惯打卡时调用 `addExpForHabitCheckin()`
 - 升级时显示提示弹窗
+- 宠物喂食不直接扣减 `exp`，而是累加 `exp_spent`；展示可用经验时使用 `exp - exp_spent`
+
+### 5. 任务/项目筛选语义
+- 任务管理页的“全部”不是数据库意义上的全部，而是当前待办视图：`status !== 'completed'`
+- 项目管理页的“全部”同样只显示未完成项目：`status !== 'completed'`
+- 已完成任务和已完成项目必须通过“已完成”筛选单独查看
+
+### 6. 宠物字段命名
+- 数据库沿用字段名 `hunger`，但前端统一显示为“饱腹感”
+- 新建宠物的 `hunger` 默认值是 `0`
+- 旧数据中从未喂食过的宠物通过迁移校正为 `0`
+- 不要在 UI 文案中再使用“饥饿值”
 
 ---
 
@@ -421,6 +498,14 @@ git push
 ### 问题3：任务卡片高度不一致
 **原因**：使用了 h-full 导致高度不固定  
 **解决**：设置固定高度 656px，内容区域可滚动
+
+### 问题4：专注时长图表顶部数值被边框遮挡
+**原因**：Recharts 顶部 `LabelList` 没有足够上边距
+**解决**：周/月图表设置 `margin.top`，并统一使用 `formatChartFocusMinutes()` 格式化标签
+
+### 问题5：桌面宠物交互按钮遮挡宠物
+**原因**：按钮放在宠物图层上方，悬停时与宠物主体重叠
+**解决**：按钮固定在宠物上方独立区域，宠物本体负责拖动，饱腹感条只在悬停时显示
 
 ---
 
@@ -446,6 +531,18 @@ git push
 2. 组件样式：直接修改组件中的 Tailwind 类名
 3. 主题色：修改 `globals.css` 中的 CSS 变量
 
+### 修改宠物喂食逻辑
+1. 前端食物配置：编辑 `lib/services/petService.ts` 中的 `PET_FOODS`
+2. 数据库喂食逻辑：新增 Supabase migration，更新 `feed_couple_pet()` RPC
+3. 若新增食物类型，同步更新 `pet_feed_logs.food_type` 的 CHECK 约束
+4. 保持前端显示语义为“饱腹感”，数据库字段仍使用 `hunger`
+
+### 修改桌面宠物外观/交互
+1. 宠物形象资源放在 `public/pets/`
+2. 修改 `app/dashboard/partner/components/AnimatedGermanShepherd.tsx` 调整形象、按钮、进度条和动画
+3. 修改 `app/dashboard/partner/components/DesktopPet.tsx` 调整全站悬浮位置、拖动和喂食菜单
+4. 桌宠入口在 `app/dashboard/layout.tsx`，不要只挂在伴侣空间页面内
+
 ---
 
 ## 📞 联系信息
@@ -462,4 +559,4 @@ git push
 
 ---
 
-**最后更新**：2026年5月28日
+**最后更新**：2026年6月5日
