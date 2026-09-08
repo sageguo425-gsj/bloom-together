@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { Task, TaskFormData, TaskPriority, TaskStatus } from '@/lib/types/task';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/types/task';
-import { X, Plus } from 'lucide-react';
+import { Check, Plus, Trash2, X } from 'lucide-react';
+import styles from './TaskForm.module.css';
 
 interface TaskFormProps {
   task?: Task;
@@ -29,6 +30,12 @@ interface UserTag {
   color: string;
 }
 
+interface TagContextMenu {
+  tag: UserTag;
+  x: number;
+  y: number;
+}
+
 export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
   const [formData, setFormData] = useState<TaskFormData>({
     title: task?.title || '',
@@ -50,6 +57,9 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
   const [userTags, setUserTags] = useState<UserTag[]>([]);
   const [newTag, setNewTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
+  const [tagContextMenu, setTagContextMenu] = useState<TagContextMenu | null>(null);
+  const [deletingTagId, setDeletingTagId] = useState<number | null>(null);
+  const [deletedTagName, setDeletedTagName] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -62,12 +72,12 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 加载项目 - 加载所有未归档的项目
+      // 新建或编辑任务时只允许关联未完成项目
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
-        .select('id, title, status')
+        .select('id, title')
         .eq('user_id', user.id)
-        .neq('status', 'archived')
+        .in('status', ['pending', 'in_progress'])
         .order('title');
 
       if (projectsError) {
@@ -82,7 +92,15 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
         .eq('is_active', true)
         .order('name');
 
-      setProjects(projectsData || []);
+      const availableProjects = projectsData || [];
+      setProjects(availableProjects);
+      setFormData(prev => {
+        if (!prev.project_id || availableProjects.some(project => project.id === prev.project_id)) {
+          return prev;
+        }
+
+        return { ...prev, project_id: undefined };
+      });
       setHabits(habitsData?.map(h => ({ id: h.id, title: h.name, icon: h.icon })) || []);
     } catch (error) {
       console.error('加载项目和习惯失败:', error);
@@ -183,6 +201,78 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
     }));
   };
 
+  const showTagContextMenu = (event: React.MouseEvent<HTMLElement>, tag: UserTag) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const menuWidth = 152;
+    const menuHeight = 48;
+    const pagePadding = 12;
+
+    setTagContextMenu({
+      tag,
+      x: Math.min(event.clientX, window.innerWidth - menuWidth - pagePadding),
+      y: Math.min(event.clientY, window.innerHeight - menuHeight - pagePadding),
+    });
+  };
+
+  const deleteUserTag = async () => {
+    if (!tagContextMenu || deletingTagId !== null) return;
+
+    const tagToDelete = tagContextMenu.tag;
+    setDeletingTagId(tagToDelete.id);
+
+    try {
+      const { error } = await supabase
+        .from('user_tags')
+        .delete()
+        .eq('id', tagToDelete.id);
+
+      if (error) throw error;
+
+      setUserTags(prev => prev.filter(tag => tag.id !== tagToDelete.id));
+      setFormData(prev => ({
+        ...prev,
+        tags: prev.tags.filter(tag => tag !== tagToDelete.name),
+      }));
+      setTagContextMenu(null);
+      setDeletedTagName(tagToDelete.name);
+    } catch (error) {
+      console.error('删除标签失败:', error);
+      alert('删除标签失败，请重试');
+    } finally {
+      setDeletingTagId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!tagContextMenu) return;
+
+    const closeContextMenu = () => setTagContextMenu(null);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeContextMenu();
+    };
+
+    document.addEventListener('pointerdown', closeContextMenu);
+    window.addEventListener('resize', closeContextMenu);
+    window.addEventListener('scroll', closeContextMenu, true);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeContextMenu);
+      window.removeEventListener('resize', closeContextMenu);
+      window.removeEventListener('scroll', closeContextMenu, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [tagContextMenu]);
+
+  useEffect(() => {
+    if (!deletedTagName) return;
+
+    const timer = window.setTimeout(() => setDeletedTagName(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [deletedTagName]);
+
   const calculateDuration = () => {
     if (formData.start_time && formData.end_time) {
       const [startHour, startMin] = formData.start_time.split(':').map(Number);
@@ -200,18 +290,28 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-8 py-6 rounded-t-3xl">
+        <div className="relative shrink-0 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-8 py-6">
           <h2 className="text-2xl font-light">
             {task ? '编辑任务' : '创建新任务'}
           </h2>
           <p className="text-emerald-100 text-sm font-light mt-1">
             {task ? '修改任务信息' : '填写任务详细信息'}
           </p>
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="关闭任务表单"
+            className="absolute right-6 top-6 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className={`${styles.scrollArea} min-h-0 flex-1 overflow-y-auto px-8 py-7`}>
+            <div className="space-y-6 pr-2">
           {/* 标题 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -361,21 +461,28 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
 
             {/* 已选标签 */}
             <div className="flex flex-wrap gap-2 mb-3">
-              {formData.tags.map((tag) => (
-                <div
-                  key={tag}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium"
-                >
-                  <span>{tag}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    className="hover:bg-emerald-200 rounded-full p-0.5 transition-colors"
+              {formData.tags.map((tag) => {
+                const savedTag = userTags.find(userTag => userTag.name === tag);
+
+                return (
+                  <div
+                    key={tag}
+                    onContextMenu={savedTag ? (event) => showTagContextMenu(event, savedTag) : undefined}
+                    aria-haspopup={savedTag ? 'menu' : undefined}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium"
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
+                    <span>{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      aria-label={`从当前任务移除${tag}标签`}
+                      className="hover:bg-emerald-200 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             {/* 可选标签列表 */}
@@ -393,6 +500,8 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                           ...prev,
                           tags: [...prev.tags, tag.name as any]
                         }))}
+                        onContextMenu={(event) => showTagContextMenu(event, tag)}
+                        aria-haspopup="menu"
                         className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors"
                       >
                         {tag.name}
@@ -439,7 +548,7 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
               )}
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              创建的标签会保存到标签库，可在所有任务中使用
+              创建的标签会保存到标签库；右键单击标签可将其删除
             </p>
           </div>
 
@@ -505,8 +614,11 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
             )}
           </div>
 
-          {/* 按钮 */}
-          <div className="flex gap-3 pt-4">
+            </div>
+          </div>
+
+          {/* 固定操作栏 */}
+          <div className="shrink-0 flex gap-3 border-t border-emerald-100 bg-white px-8 py-4 shadow-[0_-8px_24px_rgba(16,185,129,0.06)]">
             <button
               type="button"
               onClick={onCancel}
@@ -523,6 +635,38 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
           </div>
         </form>
       </div>
+
+      {tagContextMenu && (
+        <div
+          role="menu"
+          aria-label={`${tagContextMenu.tag.name}标签操作`}
+          className="fixed z-[60] w-38 rounded-xl border border-gray-200 bg-white p-1.5 shadow-2xl"
+          style={{ left: tagContextMenu.x, top: tagContextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={deleteUserTag}
+            disabled={deletingTagId === tagContextMenu.tag.id}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            {deletingTagId === tagContextMenu.tag.id ? '正在删除...' : '删除标签'}
+          </button>
+        </div>
+      )}
+
+      {deletedTagName && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-700 shadow-xl"
+        >
+          <Check className="h-4 w-4" />
+          “{deletedTagName}”标签已删除
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,26 @@
+.scrollArea {
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(16, 185, 129, 0.72) transparent;
+  scrollbar-width: thin;
+}
+
+.scrollArea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollArea::-webkit-scrollbar-track {
+  margin-block: 12px;
+  background: transparent;
+}
+
+.scrollArea::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #6ee7b7 0%, #14b8a6 100%);
+  background-clip: padding-box;
+}
+
+.scrollArea::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #34d399 0%, #0d9488 100%);
+  background-clip: padding-box;
+}
