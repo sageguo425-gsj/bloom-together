@@ -5,9 +5,24 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import type { Project } from '@/lib/types/database';
-import Link from 'next/link';
+import { ArrowUpDown } from 'lucide-react';
 
 import ProjectCard from './components/ProjectCard';
+
+type ProjectSort = 'priority' | 'deadline';
+
+const PROJECT_PRIORITY_ORDER: Record<Project['priority'], number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+const compareProjectDeadlines = (first: Project, second: Project) => {
+  if (!first.end_date && !second.end_date) return 0;
+  if (!first.end_date) return 1;
+  if (!second.end_date) return -1;
+  return first.end_date.localeCompare(second.end_date);
+};
 
 export default function ProjectsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -16,6 +31,7 @@ export default function ProjectsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
+  const [sortBy, setSortBy] = useState<ProjectSort>('priority');
   const router = useRouter();
   const supabase = createClient();
 
@@ -63,10 +79,21 @@ export default function ProjectsPage() {
     router.push('/login');
   };
 
-  const filteredProjects = projects.filter((project) => {
-    if (activeFilter === 'all') return project.status !== 'completed';
-    return project.status === activeFilter;
-  });
+  const filteredProjects = projects
+    .filter((project) => {
+      if (activeFilter === 'all') return project.status !== 'completed';
+      return project.status === activeFilter;
+    })
+    .sort((first, second) => {
+      const priorityDifference = PROJECT_PRIORITY_ORDER[first.priority] - PROJECT_PRIORITY_ORDER[second.priority];
+      const deadlineDifference = compareProjectDeadlines(first, second);
+
+      if (sortBy === 'priority') {
+        return priorityDifference || deadlineDifference || first.title.localeCompare(second.title, 'zh-CN');
+      }
+
+      return deadlineDifference || priorityDifference || first.title.localeCompare(second.title, 'zh-CN');
+    });
 
   if (loading) {
     return (
@@ -122,48 +149,64 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {/* 分类标签 */}
-        <div className="flex items-center gap-3 mb-8">
-          <button
-            onClick={() => setActiveFilter('all')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
-              activeFilter === 'all'
-                ? 'bg-white/95 text-emerald-700 shadow-md'
-                : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
-            }`}
-          >
-            全部
-          </button>
-          <button
-            onClick={() => setActiveFilter('pending')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
-              activeFilter === 'pending'
-                ? 'bg-white/95 text-orange-700 shadow-md'
-                : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
-            }`}
-          >
-            未开始
-          </button>
-          <button
-            onClick={() => setActiveFilter('in_progress')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
-              activeFilter === 'in_progress'
-                ? 'bg-white/95 text-emerald-700 shadow-md'
-                : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
-            }`}
-          >
-            进行中
-          </button>
-          <button
-            onClick={() => setActiveFilter('completed')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
-              activeFilter === 'completed'
-                ? 'bg-white/95 text-blue-700 shadow-md'
-                : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
-            }`}
-          >
-            已完成
-          </button>
+        {/* 分类标签与排序 */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setActiveFilter('all')}
+              className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
+                activeFilter === 'all'
+                  ? 'bg-white/95 text-emerald-700 shadow-md'
+                  : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
+              }`}
+            >
+              全部
+            </button>
+            <button
+              onClick={() => setActiveFilter('pending')}
+              className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
+                activeFilter === 'pending'
+                  ? 'bg-white/95 text-orange-700 shadow-md'
+                  : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
+              }`}
+            >
+              未开始
+            </button>
+            <button
+              onClick={() => setActiveFilter('in_progress')}
+              className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
+                activeFilter === 'in_progress'
+                  ? 'bg-white/95 text-emerald-700 shadow-md'
+                  : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
+              }`}
+            >
+              进行中
+            </button>
+            <button
+              onClick={() => setActiveFilter('completed')}
+              className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
+                activeFilter === 'completed'
+                  ? 'bg-white/95 text-blue-700 shadow-md'
+                  : 'bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30'
+              }`}
+            >
+              已完成
+            </button>
+          </div>
+
+          <label className="flex w-fit shrink-0 items-center gap-2 rounded-full border border-white/40 bg-white/90 py-1.5 pl-4 pr-2 text-sm text-emerald-800 shadow-sm backdrop-blur-sm transition-colors hover:bg-white">
+            <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+            <span className="font-medium">排序</span>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as ProjectSort)}
+              aria-label="项目排序方式"
+              className="cursor-pointer rounded-full border-0 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="priority">优先级</option>
+              <option value="deadline">截止时间</option>
+            </select>
+          </label>
         </div>
 
         {/* Projects Grid */}
