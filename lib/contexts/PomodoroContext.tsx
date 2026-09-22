@@ -28,6 +28,7 @@ interface PomodoroContextType {
   handleStart: () => Promise<void>;
   handlePause: () => Promise<void>;
   handleReset: () => Promise<void>;
+  skipBreak: () => Promise<void>;
   refreshTodayCompletedSessions: () => Promise<void>;
 
   // 白噪音状态
@@ -241,6 +242,13 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
     await releaseWakeLock();
   };
 
+  const skipBreak = async () => {
+    if (pomodoroTimer.mode !== 'shortBreak') return;
+
+    pomodoroTimer.switchMode('work');
+    await releaseWakeLock();
+  };
+
   const value: PomodoroContextType = {
     pomodoroTimer,
     selectedTask,
@@ -253,6 +261,7 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
     handleStart,
     handlePause,
     handleReset,
+    skipBreak,
     refreshTodayCompletedSessions,
     whiteNoise,
     userId,

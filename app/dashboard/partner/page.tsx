@@ -185,7 +185,6 @@ export default async function PartnerPage() {
     .from('projects')
     .select('id')
     .eq('user_id', partner.id)
-    .eq('is_shared', true)
     .in('status', ['active', 'pending', 'in_progress'])
 
   // 获取伴侣的习惯
@@ -196,12 +195,12 @@ export default async function PartnerPage() {
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
-  // 获取伴侣已共享的项目。不要按状态过滤：已完成项目也应在项目进度中保留。
+  // 获取伴侣未完成的项目。伴侣空间沿用既有读取权限，不依赖 is_shared 标记。
   const { data: projects } = await supabase
     .from('projects')
     .select('*')
     .eq('user_id', partner.id)
-    .eq('is_shared', true)
+    .neq('status', 'completed')
     .order('created_at', { ascending: false })
 
   const projectTitleById = new Map(

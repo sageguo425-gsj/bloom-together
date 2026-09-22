@@ -11,8 +11,9 @@ import { pomodoroService } from '@/lib/services/pomodoroService';
 import RecentSessions from './components/RecentSessions';
 import WhiteNoisePlayer from './components/WhiteNoisePlayer';
 
-type TaskWithProjectTitle = Task & {
+type TaskWithRelationTitle = Task & {
   project_title: string | null;
+  habit_name: string | null;
 };
 
 function getShanghaiDate(date = new Date()) {
@@ -42,11 +43,15 @@ function formatTaskDate(date?: string) {
   return `${Number(match[2])} 月 ${Number(match[3])} 日`;
 }
 
+function getTaskRelationLabel(task: TaskWithRelationTitle) {
+  return task.project_title || task.habit_name || '未归属项目';
+}
+
 export default function PomodoroPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState<TaskWithProjectTitle[]>([]);
-  const [manualTasks, setManualTasks] = useState<TaskWithProjectTitle[]>([]);
+  const [tasks, setTasks] = useState<TaskWithRelationTitle[]>([]);
+  const [manualTasks, setManualTasks] = useState<TaskWithRelationTitle[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDurationModal, setShowDurationModal] = useState(false);
   const [showTaskSelector, setShowTaskSelector] = useState(false);
@@ -76,37 +81,48 @@ export default function PomodoroPage() {
     handleStart,
     handlePause,
     handleReset,
+    skipBreak,
     setUserId,
     refreshTodayCompletedSessions,
   } = usePomodoro();
 
-  const addProjectTitles = useCallback(async (
+  const addRelationTitles = useCallback(async (
     taskRows: Task[]
-  ): Promise<TaskWithProjectTitle[]> => {
+  ): Promise<TaskWithRelationTitle[]> => {
     const projectIds = [...new Set(
       taskRows
         .map((task) => task.project_id)
         .filter((projectId): projectId is number => typeof projectId === 'number')
     )];
+    const habitIds = [...new Set(
+      taskRows
+        .map((task) => task.habit_id)
+        .filter((habitId): habitId is string => typeof habitId === 'string')
+    )];
 
-    if (projectIds.length === 0) {
-      return taskRows.map((task) => ({ ...task, project_title: null }));
-    }
+    const [projectsResult, habitsResult] = await Promise.all([
+      projectIds.length > 0
+        ? supabase.from('projects').select('id, title').in('id', projectIds)
+        : Promise.resolve({ data: [], error: null }),
+      habitIds.length > 0
+        ? supabase.from('habits').select('id, name').in('id', habitIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
 
-    const { data: projects, error } = await supabase
-      .from('projects')
-      .select('id, title')
-      .in('id', projectIds);
-
-    if (error) throw error;
+    if (projectsResult.error) throw projectsResult.error;
+    if (habitsResult.error) throw habitsResult.error;
 
     const projectTitleById = new Map(
-      (projects || []).map((project) => [project.id, project.title])
+      (projectsResult.data || []).map((project) => [project.id, project.title])
+    );
+    const habitNameById = new Map(
+      (habitsResult.data || []).map((habit) => [habit.id, habit.name])
     );
 
     return taskRows.map((task) => ({
       ...task,
       project_title: task.project_id ? projectTitleById.get(task.project_id) || null : null,
+      habit_name: task.habit_id ? habitNameById.get(task.habit_id) || null : null,
     }));
   }, [supabase]);
 
@@ -121,11 +137,11 @@ export default function PomodoroPage() {
         .order('start_time', { ascending: true });
 
       if (error) throw error;
-      setTasks(await addProjectTitles((data || []) as Task[]));
+      setTasks(await addRelationTitles((data || []) as Task[]));
     } catch (error) {
       console.error('加载任务失败:', error);
     }
-  }, [addProjectTitles, supabase]);
+  }, [addRelationTitles, supabase]);
 
   const loadManualTasks = useCallback(async (userId: string) => {
     try {
@@ -139,11 +155,11 @@ export default function PomodoroPage() {
         .limit(100);
 
       if (error) throw error;
-      setManualTasks(await addProjectTitles((data || []) as Task[]));
+      setManualTasks(await addRelationTitles((data || []) as Task[]));
     } catch (error) {
       console.error('加载手动记录任务失败:', error);
     }
-  }, [addProjectTitles, supabase]);
+  }, [addRelationTitles, supabase]);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen((current) => !current);
@@ -321,6 +337,14 @@ export default function PomodoroPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
+            {pomodoroTimer.mode === 'shortBreak' && (
+              <button
+                onClick={skipBreak}
+                className="rounded-full bg-white/20 px-5 py-3 text-sm font-medium hover:bg-white/30 transition-all"
+              >
+                跳过休息
+              </button>
+            )}
           </div>
           <button
             onClick={() => setIsFullscreen(false)}
@@ -401,7 +425,7 @@ export default function PomodoroPage() {
                             >
                               <span className="block font-medium">{task.title}</span>
                               <span className="block mt-1 text-xs text-gray-500">
-                                {formatTaskDate(task.date)} · {task.project_title || '未归属项目'}
+                                {formatTaskDate(task.date)} · {getTaskRelationLabel(task)}
                               </span>
                             </button>
                           ))
@@ -462,6 +486,14 @@ export default function PomodoroPage() {
                   >
                     重置
                   </button>
+                  {pomodoroTimer.mode === 'shortBreak' && (
+                    <button
+                      onClick={skipBreak}
+                      className="px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 bg-white/20 backdrop-blur-sm text-white rounded-full font-medium text-sm sm:text-base lg:text-lg hover:bg-white/30 transition-all"
+                    >
+                      跳过休息
+                    </button>
+                  )}
                   <button
                     onClick={toggleFullscreen}
                     className="p-3 sm:p-4 lg:p-5 bg-white/20 backdrop-blur-sm text-white rounded-full hover:bg-white/30 transition-all"
@@ -621,7 +653,7 @@ export default function PomodoroPage() {
                   {manualTasks.map((task) => (
                     <option key={task.id} value={task.id}>
                       {task.title}
-                      {` · ${formatTaskDate(task.date)} · ${task.project_title || '未归属项目'}`}
+                      {` · ${formatTaskDate(task.date)} · ${getTaskRelationLabel(task)}`}
                     </option>
                   ))}
                 </select>
