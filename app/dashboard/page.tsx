@@ -50,6 +50,13 @@ const formatChartFocusMinutes = (value: unknown) => {
   return `${hours}小时${remainingMinutes}分钟`;
 };
 
+const getShanghaiDate = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(date);
+
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +171,7 @@ export default function DashboardPage() {
 
   const loadHabitStats = async (userId: string) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getShanghaiDate();
 
       // 获取所有活跃的习惯
       const { data: habits, error: habitsError } = await supabase
@@ -181,20 +188,12 @@ export default function DashboardPage() {
 
       const totalHabits = habits?.length || 0;
 
-      // 获取今日打卡 - 尝试不同的字段名
-      let todayCheckins = null;
-      let checkinsError = null;
-
-      // 先尝试使用 created_at 字段（如果 date 字段不存在）
-      const result = await supabase
+      // 打卡日由 checkin_date 记录，使用北京时间避免 UTC 日期偏移。
+      const { data: todayCheckins, error: checkinsError } = await supabase
         .from('habit_checkins')
-        .select('habit_id, created_at')
+        .select('habit_id')
         .eq('user_id', userId)
-        .gte('created_at', `${today}T00:00:00`)
-        .lte('created_at', `${today}T23:59:59`);
-
-      todayCheckins = result.data;
-      checkinsError = result.error;
+        .eq('checkin_date', today);
 
       if (checkinsError) {
         console.error('获取打卡记录失败:', checkinsError.message || JSON.stringify(checkinsError));
@@ -202,7 +201,12 @@ export default function DashboardPage() {
         return;
       }
 
-      const checkedToday = todayCheckins?.length || 0;
+      const activeHabitIds = new Set((habits || []).map((habit) => habit.id));
+      const checkedToday = new Set(
+        (todayCheckins || [])
+          .map((checkin) => checkin.habit_id)
+          .filter((habitId) => activeHabitIds.has(habitId))
+      ).size;
 
       setHabitStats({ totalHabits, checkedToday, currentStreak: 0 });
     } catch (error: any) {
@@ -215,9 +219,9 @@ export default function DashboardPage() {
     try {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, status')
+        .select('id')
         .eq('user_id', userId)
-        .neq('status', 'archived');
+        .eq('status', 'in_progress');
 
       if (error) {
         console.error('获取项目列表失败:', error);
@@ -225,8 +229,7 @@ export default function DashboardPage() {
         return;
       }
 
-      // 统计活跃项目（active 和 completed 状态）
-      const activeCount = data?.filter(p => p.status === 'active' || p.status === 'completed').length || 0;
+      const activeCount = data?.length || 0;
       setProjectStats({ activeProjects: activeCount });
     } catch (error) {
       console.error('加载项目统计失败:', error);

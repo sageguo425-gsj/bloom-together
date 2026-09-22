@@ -180,12 +180,13 @@ export default async function PartnerPage() {
   const habitsChecked = todayCheckins?.length || 0
   const habitsTotal = allHabits?.length || 0
 
-  // 获取伴侣活跃项目数
+  // 获取伴侣活跃项目数（已完成项目不计入）
   const { data: activeProjects } = await supabase
     .from('projects')
     .select('id')
     .eq('user_id', partner.id)
-    .neq('status', 'archived')
+    .eq('is_shared', true)
+    .in('status', ['active', 'pending', 'in_progress'])
 
   // 获取伴侣的习惯
   const { data: habits } = await supabase
@@ -195,11 +196,12 @@ export default async function PartnerPage() {
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
-  // 获取伴侣的项目
+  // 获取伴侣已共享的项目。不要按状态过滤：已完成项目也应在项目进度中保留。
   const { data: projects } = await supabase
     .from('projects')
     .select('*')
     .eq('user_id', partner.id)
+    .eq('is_shared', true)
     .order('created_at', { ascending: false })
 
   const projectTitleById = new Map(

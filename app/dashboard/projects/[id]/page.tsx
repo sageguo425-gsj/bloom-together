@@ -647,7 +647,7 @@ function EditProjectModal({ project, onClose, onSuccess }: { project: Project; o
           <p className="text-gray-600 font-light text-sm mt-2">更新项目信息</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6 text-gray-900 caret-gray-900 [color-scheme:light]">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">项目名称</label>
             <input

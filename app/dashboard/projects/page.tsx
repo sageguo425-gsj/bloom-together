@@ -311,7 +311,7 @@ function CreateProjectModal({ onClose, onSuccess, userId }: { onClose: () => voi
           <p className="text-gray-600 font-light text-sm mt-2">设定你的目标，开始新的旅程</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6 text-gray-900 caret-gray-900 [color-scheme:light]">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-light">
               {error}
@@ -485,7 +485,7 @@ function EditProjectModal({ project, onClose, onSuccess }: { project: Project; o
           <p className="text-gray-600 font-light text-sm mt-2">修改项目信息</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6 text-gray-900 caret-gray-900 [color-scheme:light]">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-light">
               {error}

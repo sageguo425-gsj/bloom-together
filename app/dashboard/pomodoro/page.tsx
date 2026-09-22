@@ -11,6 +11,10 @@ import { pomodoroService } from '@/lib/services/pomodoroService';
 import RecentSessions from './components/RecentSessions';
 import WhiteNoisePlayer from './components/WhiteNoisePlayer';
 
+type TaskWithProjectTitle = Task & {
+  project_title: string | null;
+};
+
 function getShanghaiDate(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
@@ -29,11 +33,20 @@ function getShanghaiTime(date = new Date()) {
   }).format(date);
 }
 
+function formatTaskDate(date?: string) {
+  if (!date) return '未设置日期';
+
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return date;
+
+  return `${Number(match[2])} 月 ${Number(match[3])} 日`;
+}
+
 export default function PomodoroPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [manualTasks, setManualTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<TaskWithProjectTitle[]>([]);
+  const [manualTasks, setManualTasks] = useState<TaskWithProjectTitle[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDurationModal, setShowDurationModal] = useState(false);
   const [showTaskSelector, setShowTaskSelector] = useState(false);
@@ -67,6 +80,36 @@ export default function PomodoroPage() {
     refreshTodayCompletedSessions,
   } = usePomodoro();
 
+  const addProjectTitles = useCallback(async (
+    taskRows: Task[]
+  ): Promise<TaskWithProjectTitle[]> => {
+    const projectIds = [...new Set(
+      taskRows
+        .map((task) => task.project_id)
+        .filter((projectId): projectId is number => typeof projectId === 'number')
+    )];
+
+    if (projectIds.length === 0) {
+      return taskRows.map((task) => ({ ...task, project_title: null }));
+    }
+
+    const { data: projects, error } = await supabase
+      .from('projects')
+      .select('id, title')
+      .in('id', projectIds);
+
+    if (error) throw error;
+
+    const projectTitleById = new Map(
+      (projects || []).map((project) => [project.id, project.title])
+    );
+
+    return taskRows.map((task) => ({
+      ...task,
+      project_title: task.project_id ? projectTitleById.get(task.project_id) || null : null,
+    }));
+  }, [supabase]);
+
   const loadTasks = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -78,11 +121,11 @@ export default function PomodoroPage() {
         .order('start_time', { ascending: true });
 
       if (error) throw error;
-      setTasks(data || []);
+      setTasks(await addProjectTitles((data || []) as Task[]));
     } catch (error) {
       console.error('加载任务失败:', error);
     }
-  }, [supabase]);
+  }, [addProjectTitles, supabase]);
 
   const loadManualTasks = useCallback(async (userId: string) => {
     try {
@@ -96,11 +139,11 @@ export default function PomodoroPage() {
         .limit(100);
 
       if (error) throw error;
-      setManualTasks(data || []);
+      setManualTasks(await addProjectTitles((data || []) as Task[]));
     } catch (error) {
       console.error('加载手动记录任务失败:', error);
     }
-  }, [supabase]);
+  }, [addProjectTitles, supabase]);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen((current) => !current);
@@ -356,7 +399,10 @@ export default function PomodoroPage() {
                               }}
                               className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-all text-sm text-gray-900 border-b border-gray-100 last:border-b-0"
                             >
-                              {task.title}
+                              <span className="block font-medium">{task.title}</span>
+                              <span className="block mt-1 text-xs text-gray-500">
+                                {formatTaskDate(task.date)} · {task.project_title || '未归属项目'}
+                              </span>
                             </button>
                           ))
                         )}
@@ -575,7 +621,7 @@ export default function PomodoroPage() {
                   {manualTasks.map((task) => (
                     <option key={task.id} value={task.id}>
                       {task.title}
-                      {task.date ? ` · ${task.date}` : ''}
+                      {` · ${formatTaskDate(task.date)} · ${task.project_title || '未归属项目'}`}
                     </option>
                   ))}
                 </select>
