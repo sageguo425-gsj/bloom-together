@@ -10,6 +10,7 @@ import { shanghaiToday } from '@/lib/utils/schedule';
 
 interface TaskFormProps {
   task?: Task;
+  initialValues?: Partial<TaskFormData>;
   onSubmit: (data: TaskFormData) => void;
   onCancel: () => void;
 }
@@ -47,20 +48,20 @@ interface TagContextMenu {
   y: number;
 }
 
-export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
+export default function TaskForm({ task, initialValues, onSubmit, onCancel }: TaskFormProps) {
   const [formData, setFormData] = useState<TaskFormData>({
-    title: task?.title || '',
-    description: task?.description || '',
-    priority: task?.priority || 'medium',
-    status: task?.status || 'pending',
-    tags: task?.tags || [],
-    date: task?.date || shanghaiToday(),
-    start_time: task?.start_time || '',
-    end_time: task?.end_time || '',
-    estimated_duration: task?.estimated_duration || undefined,
-    project_id: task?.project_id || undefined,
-    habit_id: task?.habit_id || undefined,
-    schedule_goal_id: task?.schedule_goal_id || undefined,
+    title: task?.title ?? initialValues?.title ?? '',
+    description: task?.description ?? initialValues?.description ?? '',
+    priority: task?.priority ?? initialValues?.priority ?? 'medium',
+    status: task?.status ?? initialValues?.status ?? 'pending',
+    tags: task?.tags ?? initialValues?.tags ?? [],
+    date: task?.date ?? initialValues?.date ?? shanghaiToday(),
+    start_time: task?.start_time ?? initialValues?.start_time ?? '',
+    end_time: task?.end_time ?? initialValues?.end_time ?? '',
+    estimated_duration: task?.estimated_duration ?? initialValues?.estimated_duration,
+    project_id: task?.project_id ?? initialValues?.project_id,
+    habit_id: task?.habit_id ?? initialValues?.habit_id,
+    schedule_goal_id: task?.schedule_goal_id ?? initialValues?.schedule_goal_id,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import Link from 'next/link';
-import { CalendarDays, ChevronRight, CirclePlus, ClipboardCheck, Pencil, Target, Trash2, X } from 'lucide-react';
+import { CalendarDays, ChevronRight, CirclePlus, ClipboardCheck, Clock3, Folder, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { Task } from '@/lib/types/task';
+import type { Task, TaskFormData } from '@/lib/types/task';
+import TaskForm from '../tasks/components/TaskForm';
 import {
   goalProgress, periodRange, shanghaiToday,
   type GoalPeriod, type ProgressMode, type ReviewPeriod,
@@ -19,6 +19,7 @@ type GoalDraft = {
   parent_goal_id: string; progress_mode: ProgressMode; cadence: 'period' | 'week';
   target_count: string; habit_id: string; project_id: string;
 };
+type GoalMapTab = 'today' | GoalPeriod;
 
 const periodNames: Record<GoalPeriod, string> = { semester: '学期', month: '月', week: '周' };
 const reviewNames: Record<ReviewPeriod, string> = { daily: '每日', weekly: '每周', monthly: '每月', semester: '学期' };
@@ -57,7 +58,7 @@ function getDefaultGoalDraft(period: GoalPeriod, term: ScheduleTerm, today: stri
   };
 }
 
-export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }: { userId: string; onTaskChanged?: () => void; refreshToken?: number }) {
+export default function ScheduleHub({ userId, todayTasks: todayTasksProp, onTaskChanged, onTaskToggle, refreshToken = 0 }: { userId: string; todayTasks?: Task[]; onTaskChanged?: () => void; onTaskToggle?: (taskId: string, currentStatus: string) => Promise<void>; refreshToken?: number }) {
   const supabase = useMemo(() => createClient(), []);
   const today = shanghaiToday();
   const [terms, setTerms] = useState<ScheduleTerm[]>([]);
@@ -68,7 +69,7 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
   const [habits, setHabits] = useState<NamedHabit[]>([]);
   const [projects, setProjects] = useState<NamedProject[]>([]);
   const [reviews, setReviews] = useState<ScheduleReview[]>([]);
-  const [goalPeriod, setGoalPeriod] = useState<GoalPeriod>('semester');
+  const [goalPeriod, setGoalPeriod] = useState<GoalMapTab>('semester');
   const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>('daily');
   const [reviewAnchor, setReviewAnchor] = useState(today);
   const [reviewDraft, setReviewDraft] = useState({ wins: '', obstacles: '', next_steps: '' });
@@ -79,13 +80,12 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [goalDraft, setGoalDraft] = useState<GoalDraft | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [quickTask, setQuickTask] = useState<{ goalId: string; title: string; date: string; habitId: string; projectId: string } | null>(null);
+  const [taskDraft, setTaskDraft] = useState<Partial<TaskFormData> | null>(null);
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [termsLoadFailed, setTermsLoadFailed] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const activeTerm = terms.find((term) => term.id === activeTermId);
   const selectedGoal = goals.find((goal) => goal.id === detailId);
 
@@ -143,7 +143,7 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
   const reviewRange = activeTerm ? periodRange(reviewPeriod, reviewAnchor, activeTerm) : { start: today, end: today };
   const savedReview = reviews.find((item) => item.period === reviewPeriod && item.period_start === reviewRange.start);
   useEffect(() => { setReviewDraft({ wins: savedReview?.wins || '', obstacles: savedReview?.obstacles || '', next_steps: savedReview?.next_steps || '' }); }, [savedReview?.id, savedReview?.updated_at, savedReview?.wins, savedReview?.obstacles, savedReview?.next_steps, reviewPeriod, reviewRange.start]);
-  const todayTasks = tasks.filter((task) => task.date === today);
+  const todayTasks = todayTasksProp ?? tasks.filter((task) => task.date === today);
   const periodTasks = tasks.filter((task) => task.date >= reviewRange.start && task.date <= reviewRange.end);
   const periodCheckins = new Set(checkins.filter((item) => item.checkin_date >= reviewRange.start && item.checkin_date <= reviewRange.end).map((item) => `${item.habit_id}|${item.checkin_date}`));
   const semesterGoals = goals.filter((goal) => goal.period === 'semester');
@@ -168,7 +168,7 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
       : await supabase.from('schedule_terms').insert(payload).select().single();
     setBusy(false);
     if (result.error) { setError(result.error.message); return; }
-    setTermModal(false); setEditingTermId(null); setError(''); setNotice(editingTermId ? '学期已更新' : '学期已创建');
+    setTermModal(false); setEditingTermId(null); setError('');
     setActiveTermId(result.data.id);
     await loadTerms();
   }
@@ -207,32 +207,22 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
       : await supabase.from('schedule_goals').insert(payload);
     setBusy(false);
     if (result.error) { setError(result.error.message); return; }
-    setGoalModal(false); setError(''); setNotice(editingGoalId ? '目标已更新' : '目标已添加'); setVersion((value) => value + 1);
+    setGoalModal(false); setError(''); setVersion((value) => value + 1);
   }
 
   async function deleteGoal(goal: ScheduleGoal) {
     if (!window.confirm(`删除“${goal.title}”？关联任务会保留，但不再关联此目标。`)) return;
     const result = await supabase.from('schedule_goals').delete().eq('id', goal.id).eq('user_id', userId);
     if (result.error) { setError(result.error.message); return; }
-    setDetailId(null); setVersion((value) => value + 1); setNotice('目标已删除');
+    setDetailId(null); setVersion((value) => value + 1);
   }
 
-  async function createTask(event: React.FormEvent) {
-    event.preventDefault();
-    if (!quickTask || !quickTask.title.trim()) return;
-    const linkedGoal = goals.find((goal) => goal.id === quickTask.goalId);
-    if (!linkedGoal || quickTask.date < linkedGoal.start_date || quickTask.date > linkedGoal.end_date) { setError('任务日期需要落在目标周期内。'); return; }
-    if (linkedGoal.progress_mode === 'habit' && quickTask.habitId !== linkedGoal.habit_id) { setError('此目标按指定习惯打卡计数，请选择目标关联的习惯。'); return; }
+  async function createTask(formData: TaskFormData) {
     setBusy(true);
-    const result = await supabase.from('tasks').insert({
-      user_id: userId, title: quickTask.title.trim(), date: quickTask.date,
-      priority: 'medium', status: 'pending', tags: [],
-      schedule_goal_id: quickTask.goalId, habit_id: quickTask.habitId || null,
-      project_id: quickTask.projectId ? Number(quickTask.projectId) : null,
-    });
+    const result = await supabase.from('tasks').insert({ ...formData, user_id: userId, status: formData.status || 'pending' });
     setBusy(false);
     if (result.error) { setError(result.error.message); return; }
-    setQuickTask(null); setDetailId(null); setError(''); setVersion((value) => value + 1); onTaskChanged?.(); setNotice('任务已创建，并与目标关联');
+    setTaskDraft(null); setDetailId(null); setError(''); setVersion((value) => value + 1); onTaskChanged?.();
   }
 
   async function saveReview(event: React.FormEvent) {
@@ -246,7 +236,7 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
     }, { onConflict: 'user_id,period,period_start' });
     setBusy(false);
     if (result.error) { setError(result.error.message); return; }
-    setError(''); setVersion((value) => value + 1); setNotice(`${reviewNames[reviewPeriod]}复盘已保存`);
+    setError(''); setVersion((value) => value + 1);
   }
 
   if (loading) return <section className="mb-8 rounded-3xl bg-white/90 p-8 text-emerald-900">正在加载目标地图…</section>;
@@ -261,20 +251,45 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
     </div>
 
     {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-    {error && (termModal || goalModal || quickTask) && <div role="alert" className="fixed left-1/2 top-24 z-[80] w-[min(90vw,36rem)] -translate-x-1/2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-xl">{error}</div>}
-    {notice && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</div>}
+    {error && (termModal || goalModal || taskDraft) && <div role="alert" className="fixed left-1/2 top-24 z-[80] w-[min(90vw,36rem)] -translate-x-1/2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-xl">{error}</div>}
     {!activeTerm ? termsLoadFailed ? <div className="rounded-3xl bg-white/95 p-8 text-center shadow-lg"><h3 className="text-xl text-emerald-950">学期暂时无法加载</h3><p className="mt-2 text-sm text-gray-600">请先处理上方提示，再重新加载。</p><button type="button" className={`${buttonClass} mt-5`} onClick={() => void loadTerms()}>重新加载</button></div> : <div className="rounded-3xl bg-white/95 p-8 text-center shadow-lg"><CalendarDays className="mx-auto mb-3 h-10 w-10 text-emerald-500" /><h3 className="text-xl text-emerald-950">先创建一个学期</h3><p className="mt-2 text-sm text-gray-600">可以从春季或秋季模板开始，再按实际校历调整日期。</p><button type="button" className={`${buttonClass} mt-5`} onClick={() => setTermModal(true)}>＋ 创建学期</button></div> : <>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
         <div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 text-xl font-semibold text-emerald-950"><Target className="h-5 w-5 text-emerald-600" />我的目标地图</h3><p className="mt-1 text-xs text-gray-600">进度来自关联任务或习惯打卡，不需要手填百分比。</p></div><button type="button" className={buttonClass} onClick={() => openGoal(goalPeriod)}>＋ 新建目标</button></div>
-          <div className="mt-5 flex gap-2 border-b border-emerald-100 pb-3" role="tablist" aria-label="目标周期">{(['semester', 'month', 'week'] as GoalPeriod[]).map((period) => <button key={period} type="button" role="tab" aria-selected={goalPeriod === period} onClick={() => setGoalPeriod(period)} className={`rounded-full px-4 py-2 text-sm ${goalPeriod === period ? 'bg-emerald-600 text-white' : 'text-emerald-800 hover:bg-emerald-50'}`}>{periodNames[period]}</button>)}</div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">{goals.filter((goal) => goal.period === goalPeriod).length ? goals.filter((goal) => goal.period === goalPeriod).map((goal) => {
-            const progress = goalProgress(goal, goals, tasks, checkins, today);
-            const parent = goals.find((item) => item.id === goal.parent_goal_id);
-            return <button key={goal.id} type="button" onClick={() => setDetailId(goal.id)} className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/60 p-4 text-left transition hover:border-emerald-300 hover:shadow-md"><div className="flex items-start justify-between gap-3"><h4 className="font-semibold text-emerald-950">{goal.title}</h4><ChevronRight className="h-4 w-4 shrink-0 text-emerald-500" /></div><p className="mt-1 line-clamp-2 min-h-8 text-xs text-gray-600">{goal.description || (parent ? `上级目标 · ${parent.title}` : '点击查看关联内容')}</p><div className="mt-4 h-2 overflow-hidden rounded-full bg-emerald-100"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${progress.percent}%` }} /></div><div className="mt-2 flex justify-between gap-2 text-xs text-emerald-800"><span className="truncate">{progress.label}</span><strong>{progress.percent}%</strong></div></button>;
-          }) : <div className="col-span-full rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/50 p-8 text-center text-sm text-gray-600">还没有{periodNames[goalPeriod]}目标。点击“新建目标”开始。</div>}</div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h3 className="flex items-center gap-2 text-xl font-semibold text-emerald-950"><Target className="h-5 w-5 text-emerald-600" />我的目标地图</h3><p className="mt-1 text-xs text-gray-600">今日待办与项目、目标和习惯共用同一份任务记录。</p></div>
+            <button type="button" className={buttonClass} onClick={() => goalPeriod === 'today' ? setTaskDraft({ date: today }) : openGoal(goalPeriod)}>{goalPeriod === 'today' ? '＋ 新建任务' : '＋ 新建目标'}</button>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2 border-b border-emerald-100 pb-3" role="tablist" aria-label="目标周期">{(['today', 'semester', 'month', 'week'] as GoalMapTab[]).map((period) => <button key={period} type="button" role="tab" aria-selected={goalPeriod === period} onClick={() => setGoalPeriod(period)} className={`rounded-full px-4 py-2 text-sm ${goalPeriod === period ? 'bg-emerald-600 text-white' : 'text-emerald-800 hover:bg-emerald-50'}`}>{period === 'today' ? '今日' : periodNames[period]}</button>)}</div>
+          {goalPeriod === 'today' ? (
+            <div className="mt-5 space-y-3">
+              <div className="flex items-center justify-between text-xs text-gray-500"><span>{today} · 今日待办</span><span>{todayTasks.filter((task) => task.status === 'completed').length} / {todayTasks.length} 已完成</span></div>
+              {todayTasks.length ? todayTasks.map((task) => {
+                const project = projects.find((item) => item.id === task.project_id);
+                const habit = habits.find((item) => item.id === task.habit_id);
+                const goal = goals.find((item) => item.id === task.schedule_goal_id);
+                return <div key={task.id} className={`flex items-start gap-3 rounded-2xl border p-4 transition ${task.status === 'completed' ? 'border-gray-200 bg-gray-50/80 opacity-65' : 'border-emerald-100 bg-gradient-to-br from-white to-emerald-50/50 hover:border-emerald-300 hover:shadow-sm'}`}>
+                  <input type="checkbox" aria-label={`完成任务：${task.title}`} checked={task.status === 'completed'} disabled={!onTaskToggle} onChange={() => void onTaskToggle?.(task.id, task.status)} className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed" />
+                  <div className="min-w-0 flex-1">
+                    <h4 className={`font-medium ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-emerald-950'}`}>{task.title}</h4>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                      {task.start_time && <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{task.start_time.slice(0, 5)}{task.end_time ? `–${task.end_time.slice(0, 5)}` : ''}</span>}
+                      {project && <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-blue-700"><Folder className="h-3.5 w-3.5" />{project.title}</span>}
+                      {goal && <span className="rounded-full bg-teal-50 px-2 py-1 text-teal-700">目标 · {goal.title}</span>}
+                      {habit && <span className="rounded-full bg-green-50 px-2 py-1 text-green-700">{habit.icon} {habit.name}</span>}
+                    </div>
+                  </div>
+                </div>;
+              }) : <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/50 p-8 text-center"><p className="text-sm text-gray-600">今天还没有待办。</p><button type="button" onClick={() => setTaskDraft({ date: today })} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline"><Plus className="h-4 w-4" />添加今日任务</button></div>}
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">{goals.filter((goal) => goal.period === goalPeriod).length ? goals.filter((goal) => goal.period === goalPeriod).map((goal) => {
+              const progress = goalProgress(goal, goals, tasks, checkins, today);
+              const parent = goals.find((item) => item.id === goal.parent_goal_id);
+              return <button key={goal.id} type="button" onClick={() => setDetailId(goal.id)} className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/60 p-4 text-left transition hover:border-emerald-300 hover:shadow-md"><div className="flex items-start justify-between gap-3"><h4 className="font-semibold text-emerald-950">{goal.title}</h4><ChevronRight className="h-4 w-4 shrink-0 text-emerald-500" /></div><p className="mt-1 line-clamp-2 min-h-8 text-xs text-gray-600">{goal.description || (parent ? `上级目标 · ${parent.title}` : '点击查看关联内容')}</p><div className="mt-4 h-2 overflow-hidden rounded-full bg-emerald-100"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${progress.percent}%` }} /></div><div className="mt-2 flex justify-between gap-2 text-xs text-emerald-800"><span className="truncate">{progress.label}</span><strong>{progress.percent}%</strong></div></button>;
+            }) : <div className="col-span-full rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/50 p-8 text-center text-sm text-gray-600">还没有{periodNames[goalPeriod]}目标。点击“新建目标”开始。</div>}</div>
+          )}
         </div>
-        <div className="space-y-5"><div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-6"><h3 className="flex items-center gap-2 text-lg font-semibold text-emerald-950"><ClipboardCheck className="h-5 w-5 text-emerald-600" />本周联动</h3><p className="mt-1 text-xs text-gray-600">完成任务后，这里的目标进度会自动变化。</p><div className="mt-4 space-y-3">{goals.filter((goal) => goal.period === 'week' || goal.cadence === 'week').slice(0, 4).map((goal) => { const progress = goalProgress(goal, goals, tasks, checkins, today); return <button key={goal.id} type="button" onClick={() => setDetailId(goal.id)} className="block w-full rounded-xl bg-emerald-50 p-3 text-left"><div className="flex justify-between gap-3 text-sm"><span className="font-medium text-emerald-950">{goal.title}</span><span className="text-emerald-700">{progress.percent}%</span></div><p className="mt-1 text-xs text-gray-600">{progress.label}</p></button>; })}{!goals.some((goal) => goal.period === 'week' || goal.cadence === 'week') && <p className="rounded-xl bg-emerald-50 p-4 text-sm text-gray-600">可以创建“每周运动 3 次”等习惯打卡目标。</p>}</div></div><div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-6"><h3 className="text-lg font-semibold text-emerald-950">今日与目标</h3><p className="mt-1 text-xs text-gray-600">首页任务与目标共用同一份任务记录。</p><p className="mt-4 text-3xl font-light text-emerald-800">{todayTasks.filter((task) => task.status === 'completed').length}<span className="text-lg text-gray-400"> / {todayTasks.length}</span></p><Link href="/dashboard/tasks" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline">前往任务界面 <ChevronRight className="h-4 w-4" /></Link></div></div>
+        <div className="space-y-5"><div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-6"><h3 className="flex items-center gap-2 text-lg font-semibold text-emerald-950"><ClipboardCheck className="h-5 w-5 text-emerald-600" />本周联动</h3><p className="mt-1 text-xs text-gray-600">完成任务后，这里的目标进度会自动变化。</p><div className="mt-4 space-y-3">{goals.filter((goal) => goal.period === 'week' || goal.cadence === 'week').slice(0, 4).map((goal) => { const progress = goalProgress(goal, goals, tasks, checkins, today); return <button key={goal.id} type="button" onClick={() => setDetailId(goal.id)} className="block w-full rounded-xl bg-emerald-50 p-3 text-left"><div className="flex justify-between gap-3 text-sm"><span className="font-medium text-emerald-950">{goal.title}</span><span className="text-emerald-700">{progress.percent}%</span></div><p className="mt-1 text-xs text-gray-600">{progress.label}</p></button>; })}{!goals.some((goal) => goal.period === 'week' || goal.cadence === 'week') && <p className="rounded-xl bg-emerald-50 p-4 text-sm text-gray-600">可以创建“每周运动 3 次”等习惯打卡目标。</p>}</div></div><div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-6"><h3 className="text-lg font-semibold text-emerald-950">今日完成</h3><p className="mt-1 text-xs text-gray-600">勾选左侧“今日”待办后会同步更新。</p><p className="mt-4 text-3xl font-light text-emerald-800">{todayTasks.filter((task) => task.status === 'completed').length}<span className="text-lg text-gray-400"> / {todayTasks.length}</span></p></div></div>
       </div>
 
       <div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-7" id="reviews"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-semibold text-emerald-950">阶段复盘</h3><p className="mt-1 text-xs text-gray-600">自动汇总真实行动，再写下观察与调整。</p></div><div className="flex flex-wrap gap-2" role="tablist" aria-label="复盘周期">{(['daily', 'weekly', 'monthly', 'semester'] as ReviewPeriod[]).map((period) => <button key={period} type="button" role="tab" aria-selected={reviewPeriod === period} onClick={() => setReviewPeriod(period)} className={`rounded-full px-3 py-2 text-xs font-medium ${reviewPeriod === period ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}>{reviewNames[period]}复盘</button>)}</div></div>
@@ -286,8 +301,8 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
 
     {goalModal && goalDraft && activeTerm && <Modal title={editingGoalId ? '编辑目标' : '新建目标'} onClose={() => setGoalModal(false)}><form onSubmit={saveGoal} className="space-y-4"><div className="grid grid-cols-2 gap-3"><div><label className={labelClass} htmlFor="goal-period">周期</label><select id="goal-period" className={fieldClass} value={goalDraft.period} onChange={(event) => { const period = event.target.value as GoalPeriod; setGoalDraft({ ...getDefaultGoalDraft(period, activeTerm, today), title: goalDraft.title, description: goalDraft.description }); }}><option value="semester">学期目标</option><option value="month">月度目标</option><option value="week">本周目标</option></select></div><div><label className={labelClass} htmlFor="goal-parent">上级目标</label><select id="goal-parent" className={fieldClass} value={goalDraft.parent_goal_id} onChange={(event) => setGoalDraft({ ...goalDraft, parent_goal_id: event.target.value })}><option value="">无</option>{goals.filter((goal) => goal.id !== editingGoalId && (goalDraft.period === 'month' ? goal.period === 'semester' : goalDraft.period === 'week' ? goal.period === 'month' : false)).map((goal) => <option key={goal.id} value={goal.id}>{goal.title}</option>)}</select></div></div><div><label className={labelClass} htmlFor="goal-title">目标名称</label><input id="goal-title" required maxLength={80} className={fieldClass} value={goalDraft.title} onChange={(event) => setGoalDraft({ ...goalDraft, title: event.target.value })} placeholder="例如：每周运动 3 次" /></div><div><label className={labelClass} htmlFor="goal-description">说明</label><textarea id="goal-description" rows={2} className={fieldClass} value={goalDraft.description} onChange={(event) => setGoalDraft({ ...goalDraft, description: event.target.value })} /></div><div className="grid grid-cols-2 gap-3"><div><label className={labelClass} htmlFor="goal-start">开始日期</label><input id="goal-start" type="date" min={activeTerm.start_date} max={activeTerm.end_date} required className={fieldClass} value={goalDraft.start_date} onChange={(event) => setGoalDraft({ ...goalDraft, start_date: event.target.value })} /></div><div><label className={labelClass} htmlFor="goal-end">结束日期</label><input id="goal-end" type="date" min={activeTerm.start_date} max={activeTerm.end_date} required className={fieldClass} value={goalDraft.end_date} onChange={(event) => setGoalDraft({ ...goalDraft, end_date: event.target.value })} /></div></div><div className="grid grid-cols-2 gap-3"><div><label className={labelClass} htmlFor="goal-mode">进度来源</label><select id="goal-mode" className={fieldClass} value={goalDraft.progress_mode} onChange={(event) => setGoalDraft({ ...goalDraft, progress_mode: event.target.value as ProgressMode })}><option value="tasks">关联任务完成数</option><option value="habit">关联习惯打卡日</option><option value="children">子目标平均进度</option></select></div><div><label className={labelClass} htmlFor="goal-project">关联项目（可选）</label><select id="goal-project" className={fieldClass} value={goalDraft.project_id} onChange={(event) => setGoalDraft({ ...goalDraft, project_id: event.target.value })}><option value="">无</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></div></div>{goalDraft.progress_mode !== 'children' && <div className="grid grid-cols-2 gap-3"><div><label className={labelClass} htmlFor="goal-target">目标数量</label><input id="goal-target" type="number" min="1" required className={fieldClass} value={goalDraft.target_count} onChange={(event) => setGoalDraft({ ...goalDraft, target_count: event.target.value })} /></div><div><label className={labelClass} htmlFor="goal-cadence">统计窗口</label><select id="goal-cadence" className={fieldClass} value={goalDraft.cadence} onChange={(event) => setGoalDraft({ ...goalDraft, cadence: event.target.value as 'period' | 'week' })}><option value="period">整个目标周期</option><option value="week">每周重新统计</option></select></div></div>}{goalDraft.progress_mode === 'habit' && <div><label className={labelClass} htmlFor="goal-habit">关联习惯</label><select id="goal-habit" className={fieldClass} required value={goalDraft.habit_id} onChange={(event) => setGoalDraft({ ...goalDraft, habit_id: event.target.value })}><option value="">选择习惯</option>{habits.map((habit) => <option key={habit.id} value={habit.id}>{habit.icon} {habit.name}</option>)}</select><p className="mt-1 text-xs text-gray-500">例如：数量 3、统计窗口“每周”，即每周运动 3 次；同一天只计一次。</p></div>}<div className="flex justify-end"><button type="submit" className={buttonClass} disabled={busy}>保存目标</button></div></form></Modal>}
 
-    {selectedGoal && <Modal title={selectedGoal.title} onClose={() => setDetailId(null)}><p className="text-sm text-gray-600">{selectedGoal.description || '暂无说明'}</p>{(() => { const progress = goalProgress(selectedGoal, goals, tasks, checkins, today); const linked = tasks.filter((task) => task.schedule_goal_id === selectedGoal.id); return <><div className="mt-5 rounded-2xl bg-emerald-50 p-5"><p className="text-3xl font-light text-emerald-800">{progress.percent}%</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-100"><div className="h-full bg-emerald-500" style={{ width: `${progress.percent}%` }} /></div><p className="mt-2 text-xs text-emerald-900">{progress.label}</p></div><div className="mt-5"><h4 className="text-sm font-semibold text-emerald-950">关联任务 · {linked.filter((task) => task.status === 'completed').length}/{linked.length}</h4><div className="mt-2 max-h-36 space-y-1 overflow-y-auto">{linked.length ? linked.map((task) => <div key={task.id} className="flex gap-2 rounded-xl bg-gray-50 p-2 text-xs text-gray-700"><span>{task.status === 'completed' ? '✓' : '○'}</span><span>{task.title} · {task.date}</span></div>) : <p className="text-xs text-gray-500">还没有关联任务，可在这里创建，或在任务界面编辑已有任务。</p>}</div></div></>; })()}<div className="mt-6 flex flex-wrap justify-between gap-2"><div className="flex gap-3"><button type="button" onClick={() => { setDetailId(null); openGoal(selectedGoal.period, selectedGoal); }} className="flex items-center gap-1 text-sm text-emerald-700"><Pencil className="h-4 w-4" />编辑</button><button type="button" onClick={() => void deleteGoal(selectedGoal)} className="flex items-center gap-1 text-sm text-red-600"><Trash2 className="h-4 w-4" />删除</button></div><button type="button" className={buttonClass} onClick={() => { setDetailId(null); setQuickTask({ goalId: selectedGoal.id, title: '', date: today < selectedGoal.start_date || today > selectedGoal.end_date ? selectedGoal.start_date : today, habitId: selectedGoal.habit_id || '', projectId: String(selectedGoal.project_id || '') }); }}><CirclePlus className="mr-1 inline h-4 w-4" />创建关联任务</button></div></Modal>}
+    {selectedGoal && <Modal title={selectedGoal.title} onClose={() => setDetailId(null)}><p className="text-sm text-gray-600">{selectedGoal.description || '暂无说明'}</p>{(() => { const progress = goalProgress(selectedGoal, goals, tasks, checkins, today); const linked = tasks.filter((task) => task.schedule_goal_id === selectedGoal.id); return <><div className="mt-5 rounded-2xl bg-emerald-50 p-5"><p className="text-3xl font-light text-emerald-800">{progress.percent}%</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-100"><div className="h-full bg-emerald-500" style={{ width: `${progress.percent}%` }} /></div><p className="mt-2 text-xs text-emerald-900">{progress.label}</p></div><div className="mt-5"><h4 className="text-sm font-semibold text-emerald-950">关联任务 · {linked.filter((task) => task.status === 'completed').length}/{linked.length}</h4><div className="mt-2 max-h-36 space-y-1 overflow-y-auto">{linked.length ? linked.map((task) => <div key={task.id} className="flex gap-2 rounded-xl bg-gray-50 p-2 text-xs text-gray-700"><span>{task.status === 'completed' ? '✓' : '○'}</span><span>{task.title} · {task.date}</span></div>) : <p className="text-xs text-gray-500">还没有关联任务，可在这里创建，或在任务界面编辑已有任务。</p>}</div></div></>; })()}<div className="mt-6 flex flex-wrap justify-between gap-2"><div className="flex gap-3"><button type="button" onClick={() => { setDetailId(null); openGoal(selectedGoal.period, selectedGoal); }} className="flex items-center gap-1 text-sm text-emerald-700"><Pencil className="h-4 w-4" />编辑</button><button type="button" onClick={() => void deleteGoal(selectedGoal)} className="flex items-center gap-1 text-sm text-red-600"><Trash2 className="h-4 w-4" />删除</button></div><button type="button" className={buttonClass} onClick={() => { setDetailId(null); setTaskDraft({ date: today < selectedGoal.start_date || today > selectedGoal.end_date ? selectedGoal.start_date : today, schedule_goal_id: selectedGoal.id, habit_id: selectedGoal.habit_id || undefined, project_id: selectedGoal.project_id || undefined }); }}><CirclePlus className="mr-1 inline h-4 w-4" />创建关联任务</button></div></Modal>}
 
-    {quickTask && <Modal title="创建关联任务" onClose={() => setQuickTask(null)}><form onSubmit={createTask} className="space-y-4"><div><label className={labelClass} htmlFor="quick-task-title">任务名称</label><input id="quick-task-title" required className={fieldClass} value={quickTask.title} onChange={(event) => setQuickTask({ ...quickTask, title: event.target.value })} /></div><div><label className={labelClass} htmlFor="quick-task-date">日期</label><input id="quick-task-date" type="date" required min={goals.find((goal) => goal.id === quickTask.goalId)?.start_date} max={goals.find((goal) => goal.id === quickTask.goalId)?.end_date} className={fieldClass} value={quickTask.date} onChange={(event) => setQuickTask({ ...quickTask, date: event.target.value })} /></div><div className="grid grid-cols-2 gap-3"><div><label className={labelClass} htmlFor="quick-task-project">项目</label><select id="quick-task-project" className={fieldClass} value={quickTask.projectId} onChange={(event) => setQuickTask({ ...quickTask, projectId: event.target.value })}><option value="">不关联</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></div><div><label className={labelClass} htmlFor="quick-task-habit">习惯</label><select id="quick-task-habit" className={fieldClass} value={quickTask.habitId} onChange={(event) => setQuickTask({ ...quickTask, habitId: event.target.value })}><option value="">不关联</option>{habits.map((habit) => <option key={habit.id} value={habit.id}>{habit.icon} {habit.name}</option>)}</select></div></div><p className="text-xs text-gray-500">任务可同时关联项目、习惯和当前目标。完成时自动更新打卡与目标进度。</p><div className="flex justify-end"><button type="submit" className={buttonClass} disabled={busy}>创建任务</button></div></form></Modal>}
+    {taskDraft && <TaskForm initialValues={taskDraft} onSubmit={createTask} onCancel={() => { setTaskDraft(null); setError(''); }} />}
   </section>;
 }

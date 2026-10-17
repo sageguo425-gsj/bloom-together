@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -72,9 +72,7 @@ export default function DashboardPage() {
   const [projectFocusData, setProjectFocusData] = useState<ProjectFocusData[]>([]);
   const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [partnerInfo, setPartnerInfo] = useState<{ username: string; avatar?: string } | null>(null);
-  const [selectedDate, setSelectedDate] = useState(getShanghaiDate);
   const [scheduleRefresh, setScheduleRefresh] = useState(0);
-  const loadedTaskDateRef = useRef<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -88,11 +86,9 @@ export default function DashboardPage() {
       }
 
       setUser(user);
-      loadedTaskDateRef.current = selectedDate;
-
       // 并行加载所有数据，即使某些失败也不影响其他
       await Promise.allSettled([
-        loadTodayTasks(user.id, selectedDate),
+        loadTodayTasks(user.id),
         loadHabitStats(user.id),
         loadProjectStats(user.id),
         loadPartnerInfo(user.id),
@@ -111,19 +107,12 @@ export default function DashboardPage() {
     if (!user) return;
     const handleVisibilityChange = () => {
       if (document.hidden) return;
-      void Promise.all([loadTodayTasks(user.id, selectedDate), loadHabitStats(user.id)]);
+      void Promise.all([loadTodayTasks(user.id), loadHabitStats(user.id)]);
       setScheduleRefresh((value) => value + 1);
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user, selectedDate]);
-
-  // 监听 selectedDate 变化，重新加载任务
-  useEffect(() => {
-    if (user && loadedTaskDateRef.current !== selectedDate) {
-      loadTodayTasks(user.id, selectedDate);
-    }
-  }, [selectedDate, user]);
+  }, [user]);
 
   const loadTodayTasks = async (userId: string, date?: string) => {
     try {
@@ -172,7 +161,6 @@ export default function DashboardPage() {
       }));
 
       setTodayTasks(tasksWithRelations as any);
-      loadedTaskDateRef.current = targetDate;
     } catch (error) {
       console.error('加载任务失败:', error);
     }
@@ -452,13 +440,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDateChange = (direction: 'prev' | 'next') => {
-    const currentDate = new Date(`${selectedDate}T12:00:00Z`);
-    currentDate.setUTCDate(currentDate.getUTCDate() + (direction === 'prev' ? -1 : 1));
-    const newDate = currentDate.toISOString().split('T')[0];
-    setSelectedDate(newDate);
-  };
-
   const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {
     try {
       const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
@@ -480,7 +461,7 @@ export default function DashboardPage() {
       }
 
       if (user) {
-        await Promise.all([loadTodayTasks(user.id, selectedDate), loadHabitStats(user.id)]);
+        await Promise.all([loadTodayTasks(user.id), loadHabitStats(user.id)]);
         setScheduleRefresh((value) => value + 1);
       }
     } catch (error) {
@@ -666,299 +647,13 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* 任务和时间轴视图 - 非对称布局 */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-          {/* 今日任务列表 - 占2列，高度与每日日程一致 */}
-          <div className="lg:col-span-2">
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl border border-emerald-300 p-6 shadow-md flex flex-col" style={{ height: '656px' }}>
-              {/* 头部 */}
-              <div className="flex items-center justify-between mb-6 flex-shrink-0">
-                <h3 className="text-xl font-light text-gray-900">今日任务</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDateChange('prev')}
-                    className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                  >
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <span className="text-sm font-light text-gray-600 min-w-[120px] text-center">
-                    {new Date(selectedDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
-                  </span>
-                  <button
-                    onClick={() => handleDateChange('next')}
-                    className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                  >
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* 任务列表 - 固定高度，可滚动 */}
-              <div className="space-y-3 flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-thin scrollbar-thumb-emerald-300 scrollbar-track-emerald-50">
-                {todayTasks.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 rounded-2xl bg-white/80 flex items-center justify-center mx-auto mb-4 shadow-sm">
-                      <span className="text-3xl">📝</span>
-                    </div>
-                    <p className="text-gray-500 text-sm font-light mb-4">今天还没有任务</p>
-                    <Link
-                      href="/dashboard/tasks"
-                      className="inline-block px-5 py-2.5 bg-emerald-500 text-white rounded-full text-sm font-medium hover:bg-emerald-600 transition-all shadow-sm"
-                    >
-                      + 添加任务
-                    </Link>
-                  </div>
-                ) : (
-                  todayTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className={`flex items-start gap-3 p-4 rounded-2xl border transition-all group cursor-pointer ${
-                        task.status === 'completed'
-                          ? 'bg-gray-50/80 border-gray-200 opacity-60'
-                          : 'bg-white/80 border-emerald-200 hover:shadow-md'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={task.status === 'completed'}
-                        onChange={() => handleToggleTaskStatus(task.id, task.status)}
-                        className="mt-1 w-5 h-5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                      />
-                      <div className="flex-1 space-y-2">
-                        <h4 className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                          {task.title}
-                        </h4>
-
-                        {/* 第一行：时间和预计时长 */}
-                        <div className="flex items-center gap-2 flex-wrap text-xs">
-                          {task.start_time && task.end_time && (
-                            <span className="flex items-center gap-1 text-gray-600">
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>{task.start_time.slice(0, 5)} - {task.end_time.slice(0, 5)}</span>
-                            </span>
-                          )}
-                          {task.estimated_duration && (
-                            <span className="flex items-center gap-1 text-gray-600">
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                              <span>预计 {Math.floor(task.estimated_duration / 60)}h {task.estimated_duration % 60}m</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* 第二行：项目/习惯、优先级、标签 */}
-                        <div className="flex items-center gap-2 flex-wrap text-xs">
-                          {(task as any).projectName && (
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
-                              📁 {(task as any).projectName}
-                            </span>
-                          )}
-                          {(task as any).habitName && (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                              ✅ {(task as any).habitName}
-                            </span>
-                          )}
-                          {(task as any).scheduleGoalName && (
-                            <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full font-medium">
-                              🎯 {(task as any).scheduleGoalName}
-                            </span>
-                          )}
-                          {task.priority && (
-                            <span className={`px-2 py-0.5 rounded-full font-medium ${
-                              task.priority === 'high'
-                                ? 'bg-red-100 text-red-700'
-                                : task.priority === 'medium'
-                                ? 'bg-orange-100 text-orange-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {task.priority === 'high' ? '高优先级' : task.priority === 'medium' ? '中优先级' : '低优先级'}
-                            </span>
-                          )}
-                          {task.tags && task.tags.length > 0 && (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
-                              {task.tags[0] === 'study' ? '学习' : task.tags[0] === 'work' ? '工作' : task.tags[0] === 'life' ? '生活' : task.tags[0] === 'health' ? '健康' : '其他'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* 时间轴视图 - 占3列 */}
-          <div className="lg:col-span-3">
-            <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-3xl border border-teal-300 p-6 shadow-md flex flex-col" style={{ height: '656px' }}>
-              {/* 头部 */}
-              <div className="flex items-center justify-between mb-6 flex-shrink-0">
-                <h3 className="text-xl font-light text-gray-900">每日日程</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDateChange('prev')}
-                    className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                  >
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center">
-                    {new Date(selectedDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
-                  </span>
-                  <button
-                    onClick={() => handleDateChange('next')}
-                    className="p-2 hover:bg-white/60 rounded-lg transition-all"
-                  >
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* 时间轴 */}
-              <div className="relative flex-1 overflow-y-auto min-h-0 bg-white/60 rounded-2xl p-4 scrollbar-thin scrollbar-thumb-teal-300 scrollbar-track-teal-50">
-                {/* 时间刻度 */}
-                <div className="space-y-0">
-                  {Array.from({ length: 17 }, (_, i) => i + 7).map((hour) => {
-                    // 为每一行收集任务段
-                    const rowTasks: Array<{
-                      task: Task;
-                      startBlock: number;
-                      endBlock: number;
-                    }> = [];
-
-                    todayTasks.forEach((task) => {
-                      if (!task.start_time || !task.end_time) return;
-
-                      const [startHour, startMin] = task.start_time.split(':').map(Number);
-                      const [endHour, endMin] = task.end_time.split(':').map(Number);
-
-                      // 如果任务在这一小时内
-                      if (startHour <= hour && endHour >= hour) {
-                        let startBlock = 0;
-                        let endBlock = 6;
-
-                        if (startHour === hour) {
-                          startBlock = Math.floor(startMin / 10);
-                        }
-                        if (endHour === hour) {
-                          endBlock = Math.ceil(endMin / 10);
-                        }
-
-                        if (startBlock < endBlock) {
-                          rowTasks.push({ task, startBlock, endBlock });
-                        }
-                      }
-                    });
-
-                    return (
-                      <div key={hour} className="relative">
-                        {/* 小时标签 */}
-                        <div className="flex items-start gap-4 border-b border-gray-200">
-                          <div className="w-16 flex-shrink-0 text-sm font-medium text-gray-700 py-2">
-                            {hour.toString().padStart(2, '0')}:00
-                          </div>
-                          <div className="flex-1"></div>
-                        </div>
-
-                        {/* 时间块行 */}
-                        <div className="flex items-start gap-4">
-                          <div className="w-16 flex-shrink-0"></div>
-                          <div className="flex-1 relative" style={{ height: '48px' }}>
-                            {/* 背景网格 */}
-                            <div className="absolute inset-0 grid grid-cols-6">
-                              {Array.from({ length: 6 }).map((_, i) => (
-                                <div
-                                  key={i}
-                                  className="border-r border-b border-gray-200 hover:bg-teal-50/30 transition-colors"
-                                />
-                              ))}
-                            </div>
-
-                            {/* 任务块 */}
-                            {rowTasks.map((item, idx) => {
-                              const widthPercent = ((item.endBlock - item.startBlock) / 6) * 100;
-                              const leftPercent = (item.startBlock / 6) * 100;
-
-                              // 根据任务状态选择颜色
-                              let bgGradient = 'from-emerald-400/90 via-emerald-500/90 to-teal-500/90';
-                              const textColor = 'text-white';
-                              let shadowColor = 'shadow-emerald-500/30';
-
-                              if (item.task.status === 'completed') {
-                                bgGradient = 'from-teal-400/90 via-teal-500/90 to-cyan-500/90';
-                                shadowColor = 'shadow-teal-500/30';
-                              } else if (item.task.status === 'in_progress') {
-                                bgGradient = 'from-green-400/90 via-green-500/90 to-emerald-500/90';
-                                shadowColor = 'shadow-green-500/30';
-                              } else {
-                                bgGradient = 'from-gray-300/90 via-gray-400/90 to-gray-500/90';
-                                shadowColor = 'shadow-gray-500/30';
-                              }
-
-                              return (
-                                <div
-                                  key={`${item.task.id}-${idx}`}
-                                  className={`absolute top-0 h-full rounded-lg bg-gradient-to-r ${bgGradient} backdrop-blur-sm border border-white/20 shadow-lg ${shadowColor} transition-all hover:scale-[1.02] hover:shadow-xl cursor-pointer group`}
-                                  style={{
-                                    left: `${leftPercent}%`,
-                                    width: `${widthPercent}%`,
-                                  }}
-                                  title={`${item.task.title} (${item.task.start_time?.slice(0, 5)} - ${item.task.end_time?.slice(0, 5)})`}
-                                >
-                                  <div className="absolute inset-0 flex items-center justify-center px-2">
-                                    <span className={`text-sm font-medium ${textColor} truncate drop-shadow-sm`}>
-                                      {item.task.title}
-                                    </span>
-                                  </div>
-                                  {/* 磨砂玻璃效果叠加层 */}
-                                  <div className="absolute inset-0 bg-white/10 rounded-lg"></div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 空状态（无任务时显示） */}
-                {todayTasks.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/95 rounded-2xl">
-                    <div className="text-center">
-                      <div className="w-16 h-16 rounded-2xl bg-teal-50 flex items-center justify-center mx-auto mb-4">
-                        <span className="text-3xl">📅</span>
-                      </div>
-                      <p className="text-gray-400 text-sm font-light mb-4">今天的日程还是空的</p>
-                      <Link
-                        href="/dashboard/tasks"
-                        className="inline-block px-5 py-2.5 bg-teal-100 text-teal-700 rounded-full text-sm font-medium hover:bg-teal-200 transition-all"
-                      >
-                        + 添加日程
-                      </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {user && <ScheduleHub
           userId={user.id}
+          todayTasks={todayTasks}
           refreshToken={scheduleRefresh}
+          onTaskToggle={handleToggleTaskStatus}
           onTaskChanged={() => {
-            void Promise.all([loadTodayTasks(user.id, selectedDate), loadHabitStats(user.id)]);
+            void Promise.all([loadTodayTasks(user.id), loadHabitStats(user.id)]);
             setScheduleRefresh((value) => value + 1);
           }}
         />}
