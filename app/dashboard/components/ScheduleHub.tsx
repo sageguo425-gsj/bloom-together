@@ -26,6 +26,16 @@ const fieldClass = 'w-full rounded-xl border border-emerald-200 bg-white px-3 py
 const labelClass = 'block text-xs font-medium text-emerald-900 mb-1.5';
 const buttonClass = 'rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50';
 
+function describeScheduleLoadError(error: { code?: string; message: string }): string {
+  if (error.code === '42501') {
+    return '当前账号没有访问日程数据表的权限（42501）。请执行日程权限补充迁移。';
+  }
+  if (error.code === '42P01' || error.code === 'PGRST205') {
+    return `日程数据表不存在或尚未被 API 识别（${error.code}）。请确认已执行日程建表迁移。`;
+  }
+  return `加载学期失败：${error.message}${error.code ? `（${error.code}）` : ''}`;
+}
+
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-emerald-950/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div role="dialog" aria-modal="true" aria-label={title} className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
@@ -73,6 +83,7 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [termsLoadFailed, setTermsLoadFailed] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const activeTerm = terms.find((term) => term.id === activeTermId);
@@ -80,8 +91,16 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
 
   const loadTerms = useCallback(async () => {
     const result = await supabase.from('schedule_terms').select('*').eq('user_id', userId).order('start_date', { ascending: false });
-    if (result.error) { setError('日程数据表尚未就绪。请先执行 supabase/migrations/20261016_schedule_hub.sql。'); setLoading(false); return; }
+    if (result.error) {
+      console.error('加载学期失败:', result.error);
+      setTermsLoadFailed(true);
+      setError(describeScheduleLoadError(result.error));
+      setLoading(false);
+      return;
+    }
     const rows = (result.data || []) as ScheduleTerm[];
+    setTermsLoadFailed(false);
+    setError('');
     setTerms(rows);
     setActiveTermId((current) => current && rows.some((item) => item.id === current) ? current : (rows.find((item) => item.start_date <= today && item.end_date >= today)?.id || rows[0]?.id || ''));
     setLoading(false);
@@ -244,7 +263,7 @@ export default function ScheduleHub({ userId, onTaskChanged, refreshToken = 0 }:
     {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
     {error && (termModal || goalModal || quickTask) && <div role="alert" className="fixed left-1/2 top-24 z-[80] w-[min(90vw,36rem)] -translate-x-1/2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-xl">{error}</div>}
     {notice && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</div>}
-    {!activeTerm ? <div className="rounded-3xl bg-white/95 p-8 text-center shadow-lg"><CalendarDays className="mx-auto mb-3 h-10 w-10 text-emerald-500" /><h3 className="text-xl text-emerald-950">先创建一个学期</h3><p className="mt-2 text-sm text-gray-600">可以从春季或秋季模板开始，再按实际校历调整日期。</p><button type="button" className={`${buttonClass} mt-5`} onClick={() => setTermModal(true)}>＋ 创建学期</button></div> : <>
+    {!activeTerm ? termsLoadFailed ? <div className="rounded-3xl bg-white/95 p-8 text-center shadow-lg"><h3 className="text-xl text-emerald-950">学期暂时无法加载</h3><p className="mt-2 text-sm text-gray-600">请先处理上方提示，再重新加载。</p><button type="button" className={`${buttonClass} mt-5`} onClick={() => void loadTerms()}>重新加载</button></div> : <div className="rounded-3xl bg-white/95 p-8 text-center shadow-lg"><CalendarDays className="mx-auto mb-3 h-10 w-10 text-emerald-500" /><h3 className="text-xl text-emerald-950">先创建一个学期</h3><p className="mt-2 text-sm text-gray-600">可以从春季或秋季模板开始，再按实际校历调整日期。</p><button type="button" className={`${buttonClass} mt-5`} onClick={() => setTermModal(true)}>＋ 创建学期</button></div> : <>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
         <div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 text-xl font-semibold text-emerald-950"><Target className="h-5 w-5 text-emerald-600" />我的目标地图</h3><p className="mt-1 text-xs text-gray-600">进度来自关联任务或习惯打卡，不需要手填百分比。</p></div><button type="button" className={buttonClass} onClick={() => openGoal(goalPeriod)}>＋ 新建目标</button></div>
