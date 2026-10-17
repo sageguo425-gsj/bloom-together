@@ -9,6 +9,7 @@ import type { Task } from '@/lib/types/task';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import { addExpForTaskCompletion } from '@/lib/services/expService';
 import { formatFocusMinutes } from '@/lib/utils';
+import ScheduleHub from './components/ScheduleHub';
 
 interface HabitStats {
   totalHabits: number;
@@ -71,7 +72,8 @@ export default function DashboardPage() {
   const [projectFocusData, setProjectFocusData] = useState<ProjectFocusData[]>([]);
   const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [partnerInfo, setPartnerInfo] = useState<{ username: string; avatar?: string } | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getShanghaiDate);
+  const [scheduleRefresh, setScheduleRefresh] = useState(0);
   const loadedTaskDateRef = useRef<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -103,19 +105,18 @@ export default function DashboardPage() {
 
     getUser();
 
-    // 添加页面可见性监听，当页面重新获得焦点时刷新任务
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user) {
-        loadTodayTasks(user.id, selectedDate);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
   }, [router, supabase]);
+
+  useEffect(() => {
+    if (!user) return;
+    const handleVisibilityChange = () => {
+      if (document.hidden) return;
+      void Promise.all([loadTodayTasks(user.id, selectedDate), loadHabitStats(user.id)]);
+      setScheduleRefresh((value) => value + 1);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user, selectedDate]);
 
   // 监听 selectedDate 变化，重新加载任务
   useEffect(() => {
@@ -126,7 +127,7 @@ export default function DashboardPage() {
 
   const loadTodayTasks = async (userId: string, date?: string) => {
     try {
-      const targetDate = date || new Date().toISOString().split('T')[0];
+      const targetDate = date || getShanghaiDate();
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -139,13 +140,17 @@ export default function DashboardPage() {
       const taskRows = data || [];
       const projectIds = [...new Set(taskRows.map((task) => task.project_id).filter(Boolean))];
       const habitIds = [...new Set(taskRows.map((task) => task.habit_id).filter(Boolean))];
+      const scheduleGoalIds = [...new Set(taskRows.map((task) => task.schedule_goal_id).filter(Boolean))];
 
-      const [projectsResult, habitsResult] = await Promise.all([
+      const [projectsResult, habitsResult, goalsResult] = await Promise.all([
         projectIds.length > 0
           ? supabase.from('projects').select('id, title').in('id', projectIds)
           : Promise.resolve({ data: [] }),
         habitIds.length > 0
           ? supabase.from('habits').select('id, name').in('id', habitIds)
+          : Promise.resolve({ data: [] }),
+        scheduleGoalIds.length > 0
+          ? supabase.from('schedule_goals').select('id, title').in('id', scheduleGoalIds)
           : Promise.resolve({ data: [] }),
       ]);
 
@@ -155,11 +160,15 @@ export default function DashboardPage() {
       const habitNameById = new Map(
         (habitsResult.data || []).map((habit) => [habit.id, habit.name])
       );
+      const goalNameById = new Map(
+        (goalsResult.data || []).map((goal) => [goal.id, goal.title])
+      );
 
       const tasksWithRelations = taskRows.map((task) => ({
         ...task,
         projectName: task.project_id ? projectNameById.get(task.project_id) || null : null,
         habitName: task.habit_id ? habitNameById.get(task.habit_id) || null : null,
+        scheduleGoalName: task.schedule_goal_id ? goalNameById.get(task.schedule_goal_id) || null : null,
       }));
 
       setTodayTasks(tasksWithRelations as any);
@@ -444,12 +453,8 @@ export default function DashboardPage() {
   };
 
   const handleDateChange = (direction: 'prev' | 'next') => {
-    const currentDate = new Date(selectedDate);
-    if (direction === 'prev') {
-      currentDate.setDate(currentDate.getDate() - 1);
-    } else {
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
+    const currentDate = new Date(`${selectedDate}T12:00:00Z`);
+    currentDate.setUTCDate(currentDate.getUTCDate() + (direction === 'prev' ? -1 : 1));
     const newDate = currentDate.toISOString().split('T')[0];
     setSelectedDate(newDate);
   };
@@ -475,7 +480,8 @@ export default function DashboardPage() {
       }
 
       if (user) {
-        await loadTodayTasks(user.id, selectedDate);
+        await Promise.all([loadTodayTasks(user.id, selectedDate), loadHabitStats(user.id)]);
+        setScheduleRefresh((value) => value + 1);
       }
     } catch (error) {
       console.error('更新任务状态失败:', error);
@@ -759,6 +765,11 @@ export default function DashboardPage() {
                               ✅ {(task as any).habitName}
                             </span>
                           )}
+                          {(task as any).scheduleGoalName && (
+                            <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full font-medium">
+                              🎯 {(task as any).scheduleGoalName}
+                            </span>
+                          )}
                           {task.priority && (
                             <span className={`px-2 py-0.5 rounded-full font-medium ${
                               task.priority === 'high'
@@ -942,6 +953,15 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {user && <ScheduleHub
+          userId={user.id}
+          refreshToken={scheduleRefresh}
+          onTaskChanged={() => {
+            void Promise.all([loadTodayTasks(user.id, selectedDate), loadHabitStats(user.id)]);
+            setScheduleRefresh((value) => value + 1);
+          }}
+        />}
 
         {/* 专注时长统计图表 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

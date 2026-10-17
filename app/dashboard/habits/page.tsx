@@ -353,6 +353,32 @@ export default function HabitsPage() {
         return false;
       }
 
+      const { count: completedLinkedTasks, error: linkedTasksError } = await supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('habit_id', habitId)
+        .eq('date', checkinDate)
+        .eq('status', 'completed');
+      if (linkedTasksError) throw linkedTasksError;
+
+      if ((completedLinkedTasks || 0) > 0) {
+        if (existingCheckin.auto_checkin) {
+          alert('这一天仍有已完成的关联任务，撤销任务完成后才能取消自动打卡。');
+          return false;
+        }
+        const { error: conversionError } = await supabase
+          .from('habit_checkins')
+          .update({ auto_checkin: true, note: null })
+          .eq('id', existingCheckin.id);
+        if (conversionError) throw conversionError;
+        await removeExpForHabitCheckin(user.id);
+        await recalculateHabitStats(habitId);
+        if (existingCheckin.note?.startsWith(MAKEUP_NOTE_PREFIX)) await loadMonthlyMakeupUsage(user.id);
+        showCheckinSuccess('已撤销手动打卡；关联任务的自动打卡仍保留');
+        return true;
+      }
+
       const { error: deleteError } = await supabase
         .from('habit_checkins')
         .delete()

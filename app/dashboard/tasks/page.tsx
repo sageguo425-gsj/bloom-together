@@ -95,7 +95,12 @@ export default function TasksPage() {
     try {
       const { data, error } = await supabase
         .from('tasks')
-        .update(formData)
+        .update({
+          ...formData,
+          project_id: formData.project_id ?? null,
+          habit_id: formData.habit_id ?? null,
+          schedule_goal_id: formData.schedule_goal_id ?? null,
+        })
         .eq('id', editingTask.id)
         .select()
         .single();
@@ -168,6 +173,7 @@ export default function TasksPage() {
       estimated_duration: task.estimated_duration,
       project_id: task.project_id,
       habit_id: task.habit_id,
+      schedule_goal_id: task.schedule_goal_id,
     };
 
     await handleCreateTask(formData);

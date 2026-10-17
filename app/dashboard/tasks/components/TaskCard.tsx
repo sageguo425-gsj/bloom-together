@@ -29,11 +29,15 @@ export default function TaskCard({
   const [showActions, setShowActions] = useState(false);
   const [projectName, setProjectName] = useState<string>('');
   const [habitName, setHabitName] = useState<string>('');
+  const [scheduleGoalName, setScheduleGoalName] = useState<string>('');
   const supabase = createClient();
 
   // 加载项目名称和习惯名称
   useEffect(() => {
     const loadRelations = async () => {
+      setProjectName('');
+      setHabitName('');
+      setScheduleGoalName('');
       if (task.project_id) {
         try {
           const { data, error } = await supabase
@@ -65,10 +69,19 @@ export default function TaskCard({
           console.error('加载习惯名称失败:', error);
         }
       }
+
+      if (task.schedule_goal_id) {
+        const { data, error } = await supabase
+          .from('schedule_goals')
+          .select('title')
+          .eq('id', task.schedule_goal_id)
+          .maybeSingle();
+        if (!error && data) setScheduleGoalName(data.title);
+      }
     };
 
     loadRelations();
-  }, [task.project_id, task.habit_id, supabase]);
+  }, [task.project_id, task.habit_id, task.schedule_goal_id, supabase]);
 
   const priorityColors = {
     high: 'border-l-rose-500 bg-gradient-to-r from-rose-50/50 to-pink-50/30',
@@ -206,6 +219,7 @@ export default function TaskCard({
                 <span>{habitName}</span>
               </span>
             )}
+            {scheduleGoalName && <span className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 font-medium text-teal-800">🎯 {scheduleGoalName}</span>}
           </div>
 
           {/* 标签 */}

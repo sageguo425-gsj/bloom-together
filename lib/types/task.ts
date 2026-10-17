@@ -22,6 +22,7 @@ export interface Task {
   // 关联
   project_id?: number;
   habit_id?: string; // UUID string
+  schedule_goal_id?: string; // 阶段目标 UUID
 
   // 伴侣空间
   is_shared?: boolean;
@@ -46,6 +47,7 @@ export interface TaskFormData {
   estimated_duration?: number;
   project_id?: number;
   habit_id?: string; // UUID string
+  schedule_goal_id?: string;
   is_shared?: boolean;
 }
 

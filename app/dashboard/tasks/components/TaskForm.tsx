@@ -6,6 +6,7 @@ import type { Task, TaskFormData, TaskPriority, TaskStatus } from '@/lib/types/t
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/types/task';
 import { Check, Plus, Trash2, X } from 'lucide-react';
 import styles from './TaskForm.module.css';
+import { shanghaiToday } from '@/lib/utils/schedule';
 
 interface TaskFormProps {
   task?: Task;
@@ -22,6 +23,16 @@ interface Habit {
   id: string; // UUID
   title: string;
   icon: string;
+}
+
+interface ScheduleGoalOption {
+  id: string;
+  title: string;
+  period: 'semester' | 'month' | 'week';
+  start_date: string;
+  end_date: string;
+  progress_mode: 'tasks' | 'habit' | 'children';
+  habit_id: string | null;
 }
 
 interface UserTag {
@@ -43,17 +54,19 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
     priority: task?.priority || 'medium',
     status: task?.status || 'pending',
     tags: task?.tags || [],
-    date: task?.date || new Date().toISOString().split('T')[0],
+    date: task?.date || shanghaiToday(),
     start_time: task?.start_time || '',
     end_time: task?.end_time || '',
     estimated_duration: task?.estimated_duration || undefined,
     project_id: task?.project_id || undefined,
     habit_id: task?.habit_id || undefined,
+    schedule_goal_id: task?.schedule_goal_id || undefined,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [scheduleGoals, setScheduleGoals] = useState<ScheduleGoalOption[]>([]);
   const [userTags, setUserTags] = useState<UserTag[]>([]);
   const [newTag, setNewTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
@@ -61,6 +74,7 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
   const [deletingTagId, setDeletingTagId] = useState<number | null>(null);
   const [deletedTagName, setDeletedTagName] = useState<string | null>(null);
   const supabase = createClient();
+  const selectedGoal = scheduleGoals.find((goal) => goal.id === formData.schedule_goal_id);
 
   useEffect(() => {
     loadProjectsAndHabits();
@@ -92,6 +106,13 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
         .eq('is_active', true)
         .order('name');
 
+      const { data: goalsData, error: goalsError } = await supabase
+        .from('schedule_goals')
+        .select('id, title, period, start_date, end_date, progress_mode, habit_id')
+        .eq('user_id', user.id)
+        .order('end_date', { ascending: false });
+      if (goalsError) console.error('加载阶段目标失败:', goalsError);
+
       const availableProjects = projectsData || [];
       setProjects(availableProjects);
       setFormData(prev => {
@@ -102,6 +123,7 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
         return { ...prev, project_id: undefined };
       });
       setHabits(habitsData?.map(h => ({ id: h.id, title: h.name, icon: h.icon })) || []);
+      setScheduleGoals((goalsData || []) as ScheduleGoalOption[]);
     } catch (error) {
       console.error('加载项目和习惯失败:', error);
     }
@@ -357,7 +379,6 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                   onChange={(e) => setFormData({
                     ...formData,
                     project_id: e.target.value ? Number(e.target.value) : undefined,
-                    habit_id: undefined // 清除习惯选择
                   })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                 >
@@ -375,12 +396,12 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                 <label className="block text-xs text-gray-600 mb-2">关联习惯</label>
                 <select
                   value={formData.habit_id || ''}
+                  disabled={selectedGoal?.progress_mode === 'habit' && Boolean(selectedGoal.habit_id)}
                   onChange={(e) => {
                     const value = e.target.value;
                     setFormData({
                       ...formData,
                       habit_id: value || undefined,
-                      project_id: undefined // 清除项目选择
                     });
                   }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
@@ -394,9 +415,23 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
                 </select>
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              任务只能关联项目或习惯中的一个
-            </p>
+            <p className="text-xs text-gray-500 mt-2">项目、习惯和目标可以同时关联。完成关联习惯的任务会自动打卡（同一天只计一次）。</p>
+            <div className="mt-4">
+              <label className="block text-xs text-gray-600 mb-2" htmlFor="task-schedule-goal">推进阶段目标</label>
+              <select
+                id="task-schedule-goal"
+                value={formData.schedule_goal_id || ''}
+                onChange={(e) => {
+                  const goal = scheduleGoals.find((item) => item.id === e.target.value);
+                  setFormData({ ...formData, schedule_goal_id: goal?.id, habit_id: goal?.progress_mode === 'habit' && goal.habit_id ? goal.habit_id : formData.habit_id });
+                }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+              >
+                <option value="">不关联阶段目标</option>
+                {scheduleGoals.filter((goal) => (formData.date >= goal.start_date && formData.date <= goal.end_date) || goal.id === formData.schedule_goal_id).map((goal) => <option key={goal.id} value={goal.id}>{goal.period === 'semester' ? '学期' : goal.period === 'month' ? '月度' : '本周'} · {goal.title}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">显示覆盖任务日期的目标。</p>
+            </div>
           </div>
 
           {/* 任务状态 */}
@@ -560,7 +595,11 @@ export default function TaskForm({ task, onSubmit, onCancel }: TaskFormProps) {
             <input
               type="date"
               value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              onChange={(e) => {
+                const date = e.target.value;
+                const goal = scheduleGoals.find((item) => item.id === formData.schedule_goal_id);
+                setFormData({ ...formData, date, schedule_goal_id: goal && (date < goal.start_date || date > goal.end_date) ? undefined : formData.schedule_goal_id });
+              }}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
             />
           </div>
