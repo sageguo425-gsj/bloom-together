@@ -235,6 +235,7 @@ export default function ProjectsPage() {
                 project={project}
                 onEdit={setEditingProject}
                 onTogglePin={async (target) => {
+                  if (!user) return;
                   const pinned = target.status === 'completed' ? false : !target.is_pinned;
                   const { error } = await supabase.from('projects').update({ is_pinned: pinned }).eq('id', target.id).eq('user_id', user.id);
                   if (error) { alert('更新置顶状态失败，请重试'); return; }
