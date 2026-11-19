@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { CalendarDays, ChevronRight, CirclePlus, ClipboardCheck, Clock3, Folder, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, CirclePlus, ClipboardCheck, Clock3, Folder, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Task, TaskFormData } from '@/lib/types/task';
 import TaskForm from '../tasks/components/TaskForm';
@@ -26,6 +26,20 @@ const reviewNames: Record<ReviewPeriod, string> = { daily: '每日', weekly: '�
 const fieldClass = 'w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100';
 const labelClass = 'block text-xs font-medium text-emerald-900 mb-1.5';
 const buttonClass = 'rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50';
+
+function getReviewRange(period: ReviewPeriod, anchor: string, term: ScheduleTerm) {
+  if (period !== 'weekly') return periodRange(period, anchor, term);
+  const date = new Date(`${anchor}T00:00:00Z`);
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const startDay = Math.floor((day - 1) / 7) * 7 + 1;
+  const endDay = Math.min(startDay + 6, new Date(Date.UTC(year, month + 1, 0)).getUTCDate());
+  const format = (value: number) => new Date(Date.UTC(year, month, value)).toISOString().slice(0, 10);
+  const start = format(startDay);
+  const end = format(endDay);
+  return { start: start < term.start_date ? term.start_date : start, end: end > term.end_date ? term.end_date : end };
+}
 
 function describeScheduleLoadError(error: { code?: string; message: string }): string {
   if (error.code === '42501') {
@@ -72,6 +86,7 @@ export default function ScheduleHub({ userId, todayTasks: todayTasksProp, onTask
   const [goalPeriod, setGoalPeriod] = useState<GoalMapTab>('semester');
   const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>('daily');
   const [reviewAnchor, setReviewAnchor] = useState(today);
+  const [reviewMode, setReviewMode] = useState<'write' | 'history'>('write');
   const [reviewDraft, setReviewDraft] = useState({ wins: '', obstacles: '', next_steps: '' });
   const [termModal, setTermModal] = useState(false);
   const [editingTermId, setEditingTermId] = useState<string | null>(null);
@@ -119,11 +134,11 @@ export default function ScheduleHub({ userId, todayTasks: todayTasksProp, onTask
     const load = async () => {
       const [goalResult, taskResult, checkinResult, habitResult, projectResult, reviewResult] = await Promise.all([
         supabase.from('schedule_goals').select('*').eq('user_id', userId).eq('term_id', activeTerm.id).order('created_at'),
-        supabase.from('tasks').select('*').eq('user_id', userId).gte('date', activeTerm.start_date).lte('date', activeTerm.end_date).order('date'),
-        supabase.from('habit_checkins').select('habit_id, checkin_date').eq('user_id', userId).gte('checkin_date', activeTerm.start_date).lte('checkin_date', activeTerm.end_date),
+        supabase.from('tasks').select('*').eq('user_id', userId).order('date'),
+        supabase.from('habit_checkins').select('habit_id, checkin_date').eq('user_id', userId),
         supabase.from('habits').select('id, name, icon').eq('user_id', userId).eq('is_active', true).order('name'),
         supabase.from('projects').select('id, title').eq('user_id', userId).in('status', ['pending', 'in_progress']).order('title'),
-        supabase.from('schedule_reviews').select('*').eq('user_id', userId).eq('term_id', activeTerm.id),
+        supabase.from('schedule_reviews').select('*').eq('user_id', userId).order('period_start', { ascending: false }),
       ]);
       if (cancelled) return;
       const firstError = [goalResult, taskResult, checkinResult, habitResult, projectResult, reviewResult].find((result) => result.error)?.error;
@@ -140,7 +155,7 @@ export default function ScheduleHub({ userId, todayTasks: todayTasksProp, onTask
     return () => { cancelled = true; };
   }, [activeTerm, supabase, userId, version, refreshToken]);
 
-  const reviewRange = activeTerm ? periodRange(reviewPeriod, reviewAnchor, activeTerm) : { start: today, end: today };
+  const reviewRange = activeTerm ? getReviewRange(reviewPeriod, reviewAnchor, activeTerm) : { start: today, end: today };
   const savedReview = reviews.find((item) => item.period === reviewPeriod && item.period_start === reviewRange.start);
   useEffect(() => { setReviewDraft({ wins: savedReview?.wins || '', obstacles: savedReview?.obstacles || '', next_steps: savedReview?.next_steps || '' }); }, [savedReview?.id, savedReview?.updated_at, savedReview?.wins, savedReview?.obstacles, savedReview?.next_steps, reviewPeriod, reviewRange.start]);
   const todayTasks = todayTasksProp ?? tasks.filter((task) => task.date === today);
@@ -148,6 +163,25 @@ export default function ScheduleHub({ userId, todayTasks: todayTasksProp, onTask
   const periodCheckins = new Set(checkins.filter((item) => item.checkin_date >= reviewRange.start && item.checkin_date <= reviewRange.end).map((item) => `${item.habit_id}|${item.checkin_date}`));
   const semesterGoals = goals.filter((goal) => goal.period === 'semester');
   const semesterProgress = semesterGoals.length ? Math.round(semesterGoals.reduce((sum, goal) => sum + goalProgress(goal, goals, tasks, checkins, today).percent, 0) / semesterGoals.length) : 0;
+
+  function shiftReview(direction: -1 | 1) {
+    if (!activeTerm) return;
+    if (reviewPeriod === 'semester') return;
+    const date = new Date(`${reviewAnchor}T00:00:00Z`);
+    if (reviewPeriod === 'daily') date.setUTCDate(date.getUTCDate() + direction);
+    if (reviewPeriod === 'weekly') date.setUTCDate(date.getUTCDate() + direction * 7);
+    if (reviewPeriod === 'monthly') date.setUTCMonth(date.getUTCMonth() + direction);
+    const next = date.toISOString().slice(0, 10);
+    if (next < activeTerm.start_date || next > activeTerm.end_date) return;
+    setReviewAnchor(next);
+  }
+
+  function editReview(review: ScheduleReview) {
+    setReviewPeriod(review.period);
+    setReviewAnchor(review.period_start);
+    setReviewDraft({ wins: review.wins || '', obstacles: review.obstacles || '', next_steps: review.next_steps || '' });
+    setReviewMode('write');
+  }
 
   function setPreset(type: 'fall' | 'spring') {
     const year = Number(today.slice(0, 4));
@@ -292,8 +326,13 @@ export default function ScheduleHub({ userId, todayTasks: todayTasksProp, onTask
         <div className="space-y-5"><div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-6"><h3 className="flex items-center gap-2 text-lg font-semibold text-emerald-950"><ClipboardCheck className="h-5 w-5 text-emerald-600" />本周联动</h3><p className="mt-1 text-xs text-gray-600">完成任务后，这里的目标进度会自动变化。</p><div className="mt-4 space-y-3">{goals.filter((goal) => goal.period === 'week' || goal.cadence === 'week').slice(0, 4).map((goal) => { const progress = goalProgress(goal, goals, tasks, checkins, today); return <button key={goal.id} type="button" onClick={() => setDetailId(goal.id)} className="block w-full rounded-xl bg-emerald-50 p-3 text-left"><div className="flex justify-between gap-3 text-sm"><span className="font-medium text-emerald-950">{goal.title}</span><span className="text-emerald-700">{progress.percent}%</span></div><p className="mt-1 text-xs text-gray-600">{progress.label}</p></button>; })}{!goals.some((goal) => goal.period === 'week' || goal.cadence === 'week') && <p className="rounded-xl bg-emerald-50 p-4 text-sm text-gray-600">可以创建“每周运动 3 次”等习惯打卡目标。</p>}</div></div><div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-6"><h3 className="text-lg font-semibold text-emerald-950">今日完成</h3><p className="mt-1 text-xs text-gray-600">勾选左侧“今日”待办后会同步更新。</p><p className="mt-4 text-3xl font-light text-emerald-800">{todayTasks.filter((task) => task.status === 'completed').length}<span className="text-lg text-gray-400"> / {todayTasks.length}</span></p></div></div>
       </div>
 
-      <div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-7" id="reviews"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-semibold text-emerald-950">阶段复盘</h3><p className="mt-1 text-xs text-gray-600">自动汇总真实行动，再写下观察与调整。</p></div><div className="flex flex-wrap gap-2" role="tablist" aria-label="复盘周期">{(['daily', 'weekly', 'monthly', 'semester'] as ReviewPeriod[]).map((period) => <button key={period} type="button" role="tab" aria-selected={reviewPeriod === period} onClick={() => setReviewPeriod(period)} className={`rounded-full px-3 py-2 text-xs font-medium ${reviewPeriod === period ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}>{reviewNames[period]}复盘</button>)}</div></div>
-        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(250px,.8fr)_minmax(0,1.2fr)]"><div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 p-5"><label className={labelClass} htmlFor="review-anchor">回顾日期</label><input id="review-anchor" type="date" className={fieldClass} value={reviewAnchor} min={activeTerm.start_date} max={activeTerm.end_date} disabled={reviewPeriod === 'semester'} onChange={(event) => setReviewAnchor(event.target.value)} /><p className="mt-3 text-sm font-medium text-emerald-950">{reviewRange.start} — {reviewRange.end}</p><div className="mt-5 space-y-2 text-sm text-emerald-900"><p className="rounded-xl bg-white/80 p-3">完成任务：{periodTasks.filter((task) => task.status === 'completed').length} / {periodTasks.length} 项</p><p className="rounded-xl bg-white/80 p-3">习惯打卡：{periodCheckins.size} 个有效记录</p><p className="rounded-xl bg-white/80 p-3">本期目标：{goals.filter((goal) => goal.start_date <= reviewRange.end && goal.end_date >= reviewRange.start).length} 项</p></div></div><form onSubmit={saveReview} className="space-y-3"><div><label className={labelClass} htmlFor="review-wins">做得好的事</label><textarea id="review-wins" rows={2} className={fieldClass} value={reviewDraft.wins} onChange={(event) => setReviewDraft({ ...reviewDraft, wins: event.target.value })} placeholder="值得保留的做法" /></div><div><label className={labelClass} htmlFor="review-obstacles">遇到的阻碍</label><textarea id="review-obstacles" rows={2} className={fieldClass} value={reviewDraft.obstacles} onChange={(event) => setReviewDraft({ ...reviewDraft, obstacles: event.target.value })} placeholder="卡住的地方及原因" /></div><div><label className={labelClass} htmlFor="review-next">下一步调整</label><textarea id="review-next" rows={2} className={fieldClass} value={reviewDraft.next_steps} onChange={(event) => setReviewDraft({ ...reviewDraft, next_steps: event.target.value })} placeholder="下一个阶段的具体行动" /></div><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-gray-500">{savedReview ? `上次保存：${new Date(savedReview.updated_at).toLocaleString('zh-CN')}` : '尚未保存'}</span><button type="submit" className={buttonClass} disabled={busy}>保存{reviewNames[reviewPeriod]}复盘</button></div></form></div>
+      <div className="rounded-3xl border border-emerald-100 bg-white/95 p-5 shadow-lg sm:p-7" id="reviews">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-semibold text-emerald-950">阶段复盘</h3><p className="mt-1 text-xs text-gray-600">记录当下，也随时回看过去的复盘。</p></div><div className="flex gap-2"><button type="button" onClick={() => setReviewMode('write')} className={`${buttonClass} ${reviewMode !== 'write' ? 'bg-emerald-50 text-emerald-800' : ''}`}>写复盘</button><button type="button" onClick={() => setReviewMode('history')} className={`${buttonClass} ${reviewMode !== 'history' ? 'bg-emerald-50 text-emerald-800' : ''}`}>回顾复盘</button></div></div>
+        {reviewMode === 'write' ? <>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2" role="tablist" aria-label="复盘周期">{(['daily', 'weekly', 'monthly', 'semester'] as ReviewPeriod[]).map((period) => <button key={period} type="button" role="tab" aria-selected={reviewPeriod === period} onClick={() => setReviewPeriod(period)} className={`rounded-full px-3 py-2 text-xs font-medium ${reviewPeriod === period ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}>{reviewNames[period]}</button>)}</div><div className="flex items-center gap-2"><button type="button" aria-label="上一期" onClick={() => shiftReview(-1)} className="rounded-xl border border-emerald-100 p-2 text-emerald-800"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={() => setReviewAnchor(today)} className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">回到本期</button><button type="button" aria-label="下一期" onClick={() => shiftReview(1)} className="rounded-xl border border-emerald-100 p-2 text-emerald-800"><ChevronRight className="h-4 w-4" /></button></div></div>
+          <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(250px,.8fr)_minmax(0,1.2fr)]"><div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 p-5"><label className={labelClass} htmlFor="review-anchor">{reviewPeriod === 'daily' ? '选择日期' : reviewPeriod === 'weekly' ? '选择月份与月内周次' : reviewPeriod === 'monthly' ? '选择月份' : '当前学期'}</label>{reviewPeriod === 'daily' && <input id="review-anchor" type="date" className={fieldClass} value={reviewAnchor} min={activeTerm.start_date} max={activeTerm.end_date} onChange={(event) => setReviewAnchor(event.target.value)} />}{reviewPeriod === 'monthly' && <input aria-label="选择月份" type="month" className={fieldClass} value={reviewAnchor.slice(0, 7)} onChange={(event) => setReviewAnchor(`${event.target.value}-01`)} />}{reviewPeriod === 'weekly' && <div className="space-y-2"><input aria-label="选择月份" type="month" className={fieldClass} value={reviewAnchor.slice(0, 7)} onChange={(event) => setReviewAnchor(`${event.target.value}-01`)} /><select aria-label="选择月内周次" className={fieldClass} value={Math.floor((Number(reviewAnchor.slice(8, 10)) - 1) / 7)} onChange={(event) => { const day = Number(event.target.value) * 7 + 1; setReviewAnchor(`${reviewAnchor.slice(0, 7)}-${String(day).padStart(2, '0')}`); }}><option value={0}>第一周（1—7日）</option><option value={1}>第二周（8—14日）</option><option value={2}>第三周（15—21日）</option><option value={3}>第四周（22—28日）</option><option value={4} disabled={new Date(Date.UTC(Number(reviewAnchor.slice(0, 4)), Number(reviewAnchor.slice(5, 7)), 0)).getUTCDate() < 29}>第五周（29日—月末）</option></select></div>}{reviewPeriod === 'semester' && <p className="rounded-xl bg-white/80 p-3 text-sm text-emerald-900">{activeTerm.name}</p>}<p className="mt-3 text-sm font-medium text-emerald-950">{reviewRange.start} — {reviewRange.end}</p><div className="mt-5 space-y-2 text-sm text-emerald-900"><p className="rounded-xl bg-white/80 p-3">完成任务：{periodTasks.filter((task) => task.status === 'completed').length} / {periodTasks.length} 项</p><p className="rounded-xl bg-white/80 p-3">习惯打卡：{periodCheckins.size} 个有效记录</p><p className="rounded-xl bg-white/80 p-3">本期目标：{goals.filter((goal) => goal.start_date <= reviewRange.end && goal.end_date >= reviewRange.start).length} 项</p></div></div><form onSubmit={saveReview} className="space-y-3"><div><label className={labelClass} htmlFor="review-wins">做得好的事</label><textarea id="review-wins" rows={2} className={fieldClass} value={reviewDraft.wins} onChange={(event) => setReviewDraft({ ...reviewDraft, wins: event.target.value })} placeholder="值得保留的做法" /></div><div><label className={labelClass} htmlFor="review-obstacles">遇到的阻碍</label><textarea id="review-obstacles" rows={2} className={fieldClass} value={reviewDraft.obstacles} onChange={(event) => setReviewDraft({ ...reviewDraft, obstacles: event.target.value })} placeholder="卡住的地方及原因" /></div><div><label className={labelClass} htmlFor="review-next">下一步调整</label><textarea id="review-next" rows={2} className={fieldClass} value={reviewDraft.next_steps} onChange={(event) => setReviewDraft({ ...reviewDraft, next_steps: event.target.value })} placeholder="下一个阶段的具体行动" /></div><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-gray-500">{savedReview ? `上次保存：${new Date(savedReview.updated_at).toLocaleString('zh-CN')}` : '尚未保存'}</span><button type="submit" className={buttonClass} disabled={busy}>保存{reviewNames[reviewPeriod]}</button></div></form></div>
+        </> : <div className="mt-5 grid gap-3 md:grid-cols-2">{reviews.map((review) => <article key={review.id} className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/50 p-4"><div className="flex items-center justify-between gap-2"><div><span className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-800">{reviewNames[review.period]}</span><h4 className="mt-2 font-semibold text-emerald-950">{review.period_start === review.period_end ? review.period_start : `${review.period_start} — ${review.period_end}`}</h4></div><button type="button" onClick={() => editReview(review)} className="rounded-full px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100">编辑</button></div><p className="mt-3 line-clamp-2 text-sm text-gray-600">{review.wins || '尚未填写做得好的事'}</p><p className="mt-2 text-xs text-gray-500">更新于 {new Date(review.updated_at).toLocaleString('zh-CN')}</p></article>)}{reviews.length === 0 && <p className="rounded-2xl border border-dashed border-emerald-200 p-8 text-center text-sm text-gray-500">还没有保存过复盘。</p>}</div>}
+      </div>
       </div>
     </>}
 

@@ -20,6 +20,7 @@ export interface Project {
   status: 'pending' | 'in_progress' | 'completed';
   priority: 'high' | 'medium' | 'low';
   is_shared: boolean;
+  is_pinned?: boolean;
   total_tasks?: number; // 总任务量
   created_at: string;
   updated_at: string;

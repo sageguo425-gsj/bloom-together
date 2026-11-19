@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Project } from '@/lib/types/database';
-import { Calendar, TrendingUp, Folder, Settings } from 'lucide-react';
+import { Calendar, TrendingUp, Folder, Settings, Pin } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { createClient } from '@/lib/supabase/client';
@@ -13,9 +13,10 @@ import { createClient } from '@/lib/supabase/client';
 interface ProjectCardProps {
   project: Project;
   onEdit?: (project: Project) => void;
+  onTogglePin?: (project: Project) => void;
 }
 
-export default function ProjectCard({ project, onEdit }: ProjectCardProps) {
+export default function ProjectCard({ project, onEdit, onTogglePin }: ProjectCardProps) {
   const [completedTasks, setCompletedTasks] = useState(0);
   const supabase = createClient();
 
@@ -85,7 +86,7 @@ export default function ProjectCard({ project, onEdit }: ProjectCardProps) {
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
-    <div className="group bg-white rounded-2xl border border-gray-100 p-6 transition-all duration-300 hover:shadow-lg hover:border-emerald-200 hover:-translate-y-1 h-full flex flex-col relative">
+    <div className={`group rounded-2xl p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 h-full flex flex-col relative ${project.is_pinned && project.status !== 'completed' ? 'border-2 border-amber-300 bg-gradient-to-br from-amber-50 via-white to-emerald-50 shadow-md' : 'border border-gray-100 bg-white hover:border-emerald-200'}`}>
       {/* 顶部：图标和状态 */}
       <div className="flex items-start justify-between mb-4">
         <Link href={`/dashboard/projects/${project.id}`} className="flex-shrink-0">
@@ -97,6 +98,7 @@ export default function ProjectCard({ project, onEdit }: ProjectCardProps) {
           <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor()}`}>
             {getStatusLabel()}
           </span>
+          {project.status !== 'completed' && <button type="button" aria-label={project.is_pinned ? '取消置顶项目' : '置顶项目'} title={project.is_pinned ? '取消置顶' : '置顶项目'} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onTogglePin?.(project); }} className={`rounded-xl p-2 transition-colors ${project.is_pinned ? 'bg-amber-100 text-amber-700' : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-700'}`}><Pin className={`h-4 w-4 ${project.is_pinned ? 'fill-current' : ''}`} /></button>}
           <button
             onClick={(e) => {
               e.preventDefault();

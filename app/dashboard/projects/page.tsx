@@ -85,6 +85,9 @@ export default function ProjectsPage() {
       return project.status === activeFilter;
     })
     .sort((first, second) => {
+      if (activeFilter !== 'completed' && Boolean(first.is_pinned) !== Boolean(second.is_pinned)) {
+        return first.is_pinned ? -1 : 1;
+      }
       const priorityDifference = PROJECT_PRIORITY_ORDER[first.priority] - PROJECT_PRIORITY_ORDER[second.priority];
       const deadlineDifference = compareProjectDeadlines(first, second);
 
@@ -231,6 +234,12 @@ export default function ProjectsPage() {
                 key={project.id}
                 project={project}
                 onEdit={setEditingProject}
+                onTogglePin={async (target) => {
+                  const pinned = target.status === 'completed' ? false : !target.is_pinned;
+                  const { error } = await supabase.from('projects').update({ is_pinned: pinned }).eq('id', target.id).eq('user_id', user.id);
+                  if (error) { alert('更新置顶状态失败，请重试'); return; }
+                  setProjects((current) => current.map((item) => item.id === target.id ? { ...item, is_pinned: pinned } : item));
+                }}
               />
             ))}
           </div>
